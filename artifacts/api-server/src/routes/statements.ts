@@ -3,6 +3,9 @@ import { db, transactionsTable, accountsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import multer from "multer";
 import { parse as parseCsv } from "csv-parse/sync";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse") as (buffer: Buffer) => Promise<{ text: string }>;
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -137,16 +140,18 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
     if (file.mimetype === "text/csv" || file.originalname.endsWith(".csv")) {
       rows = parseCsvStatement(file.buffer);
     } else if (file.mimetype === "application/pdf" || file.originalname.endsWith(".pdf")) {
-      // For PDFs we use a simple text extraction approach
-      // In production you'd use pdf-parse or similar; here we return a helpful message
-      // We'll try to extract text from the PDF buffer as a best-effort
-      const text = file.buffer.toString("latin1");
-      // PDF text extraction is complex; we'll attempt basic line extraction
-      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 5);
-      // Heuristic: look for lines with dates and amounts
+      let pdfText = "";
+      try {
+        const data = await pdfParse(file.buffer);
+        pdfText = data.text;
+      } catch {
+        res.status(422).json({ error: "Could not read the PDF file. Please ensure it is a valid, non-password-protected PDF." });
+        return;
+      }
+      const lines = pdfText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 5);
       for (const line of lines) {
         const dateMatch = line.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}|\d{4}-\d{2}-\d{2})/);
-        const amountMatch = line.match(/(-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))/);
+        const amountMatch = line.match(/(-?\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/);
         if (dateMatch && amountMatch) {
           const parsedDate = parseDateFlexible(dateMatch[1]);
           if (!parsedDate) continue;
