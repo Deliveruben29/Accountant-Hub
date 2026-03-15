@@ -204,14 +204,16 @@ function parsePdfText(text: string): ParsedRow[] {
 
     const description = remaining || "Imported transaction";
 
-    // Determine type: negative = transfer, positive = expense (or income if labeled so)
+    // Determine type:
+    //   Negative amount = money coming INTO the account (card reload, salary, refund) → income
+    //   Positive amount = money going OUT (purchase, fee) → expense (unless clearly income by description)
     let type: "income" | "expense" | "transfer";
     if (isNegative) {
-      type = "transfer";
+      type = "income";
     } else {
       const descLower = description.toLowerCase();
       const isIncome = descLower.includes("salary") || descLower.includes("wage") || descLower.includes("nomina")
-        || descLower.includes("payment received") || descLower.includes("refund") || descLower.includes("income")
+        || descLower.includes("payment received") || descLower.includes("income")
         || category === "Salary" || category === "Sales";
       type = isIncome ? "income" : "expense";
     }
@@ -376,19 +378,23 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       )
       .returning();
 
-    // Update account balance: income adds, expense and transfer subtract
-    const net = rows.reduce((sum, r) => {
-      if (r.type === "income") return sum + r.amount;
-      if (r.type === "expense" || r.type === "transfer") return sum - r.amount;
-      return sum;
-    }, 0);
-
-    if (net !== 0) {
-      await db
-        .update(accountsTable)
-        .set({ balance: sql`${accountsTable.balance} + ${String(net)}` })
-        .where(eq(accountsTable.id, accountId));
-    }
+    // Recalculate account balance from ALL transactions (not just imported ones)
+    // This is idempotent — safe to re-import the same statement
+    await db
+      .update(accountsTable)
+      .set({
+        balance: sql`(
+          SELECT COALESCE(SUM(
+            CASE WHEN ${transactionsTable.type} = 'income'
+              THEN ${transactionsTable.amount}::numeric
+              ELSE -${transactionsTable.amount}::numeric
+            END
+          ), 0)
+          FROM ${transactionsTable}
+          WHERE ${transactionsTable.accountId} = ${accountId}
+        )`,
+      })
+      .where(eq(accountsTable.id, accountId));
 
     res.json({
       imported: inserted.length,

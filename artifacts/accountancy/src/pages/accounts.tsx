@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Landmark, Plus, CreditCard, PiggyBank, Landmark as InvestmentIcon, Building } from "lucide-react";
+import { Landmark, Plus, CreditCard, PiggyBank, Landmark as InvestmentIcon, Building, RefreshCw } from "lucide-react";
 import { 
   useListAccounts, 
   useCreateAccount,
@@ -38,6 +38,25 @@ export default function Accounts() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [recalculating, setRecalculating] = useState<number | null>(null);
+
+  const recalculateBalance = async (accountId: number) => {
+    setRecalculating(accountId);
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/recalculate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+      const msg = data.fixedTransactions > 0
+        ? `Balance updated. Also fixed ${data.fixedTransactions} transaction(s) from "transfer" to "income".`
+        : "Balance recalculated from all transactions.";
+      toast({ title: "Balance recalculated", description: msg });
+    } catch {
+      toast({ title: "Recalculation failed", variant: "destructive" });
+    } finally {
+      setRecalculating(null);
+    }
+  };
 
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountSchema),
@@ -227,6 +246,18 @@ export default function Accounts() {
                     {formatCurrency(account.balance, account.currency)}
                   </div>
                 </CardContent>
+                <CardFooter className="pt-0 pb-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    disabled={recalculating === account.id}
+                    onClick={() => recalculateBalance(account.id)}
+                  >
+                    <RefreshCw className={`w-3 h-3 mr-1.5 ${recalculating === account.id ? "animate-spin" : ""}`} />
+                    {recalculating === account.id ? "Recalculating…" : "Fix & Recalculate Balance"}
+                  </Button>
+                </CardFooter>
               </Card>
             </motion.div>
           ))
