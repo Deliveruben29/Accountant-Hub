@@ -157,9 +157,17 @@ export default function Transactions() {
 
   const handleOpenNew = () => {
     setEditingId(null);
+    // If a month filter is active, default to the last day of that month so
+    // the new record stays visible in the current filtered view.
+    let defaultDate = new Date().toISOString().split("T")[0];
+    if (filterMonth) {
+      const [y, m] = filterMonth.split("-").map(Number);
+      const lastDay = new Date(y, m, 0); // day 0 of next month = last day of this month
+      defaultDate = lastDay.toISOString().split("T")[0];
+    }
     form.reset({
       accountId: accounts[0]?.id || 0,
-      date: new Date().toISOString().split("T")[0],
+      date: defaultDate,
       description: "",
       amount: 0,
       type: "expense",
