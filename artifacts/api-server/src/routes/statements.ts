@@ -4,8 +4,13 @@ import { eq, sql } from "drizzle-orm";
 import multer from "multer";
 import { parse as parseCsv } from "csv-parse/sync";
 import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse") as (buffer: Buffer) => Promise<{ text: string }>;
+// Works in both ESM (dev/tsx) and CJS (production esbuild bundle)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _require: NodeRequire = typeof (globalThis as any).require === "function"
+  ? (globalThis as any).require
+  // @ts-ignore – __filename exists as a module-scoped variable in CJS runtime
+  : createRequire(typeof __filename !== "undefined" ? __filename : import.meta.url);
+const pdfParse = _require("pdf-parse") as (buffer: Buffer) => Promise<{ text: string }>;
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
