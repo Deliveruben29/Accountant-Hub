@@ -34,16 +34,20 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r border-border bg-sidebar">
-      <SidebarHeader className="h-16 px-6 flex items-center justify-start border-b border-border/50">
-        <div className="flex items-center gap-3">
+      <SidebarHeader className="px-0 pb-0 border-b border-border/40">
+        {/* TBF Banner in sidebar */}
+        <div className="w-full">
           <img
-            src={`${import.meta.env.BASE_URL}images/logo.png`}
-            alt="Accountancy Logo"
-            className="w-8 h-8 object-contain rounded"
+            src={`${import.meta.env.BASE_URL}images/tbf-banner.png`}
+            alt="Thebasefrequency"
+            className="w-full object-cover"
+            style={{ height: "52px", objectPosition: "center" }}
           />
-          <h1 className="font-display font-bold text-xl text-sidebar-foreground tracking-tight">
+        </div>
+        <div className="px-5 py-2.5">
+          <span className="text-xs font-semibold uppercase tracking-widest text-primary/80">
             Accountancy
-          </h1>
+          </span>
         </div>
       </SidebarHeader>
 
