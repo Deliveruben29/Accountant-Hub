@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 
-export function formatCurrency(amount: number, currency: string = "EUR") {
+export function formatCurrency(amount: number, currency: string = "CHF") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,

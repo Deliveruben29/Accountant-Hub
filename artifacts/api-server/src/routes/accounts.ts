@@ -27,7 +27,7 @@ router.post("/accounts", async (req, res) => {
       .values({
         name: body.name,
         type: body.type,
-        currency: body.currency ?? "EUR",
+        currency: body.currency ?? "CHF",
         balance: String(body.balance ?? 0),
         description: body.description ?? null,
       })

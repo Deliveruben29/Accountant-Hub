@@ -25,7 +25,7 @@ import { formatCurrency } from "@/lib/format";
 const accountSchema = z.object({
   name: z.string().min(1, "Account name is required"),
   type: z.enum([AccountType.checking, AccountType.savings, AccountType.credit, AccountType.investment, AccountType.other]),
-  currency: z.string().default("EUR"),
+  currency: z.string().default("CHF"),
   balance: z.coerce.number().default(0),
   description: z.string().optional(),
 });
@@ -44,7 +44,7 @@ export default function Accounts() {
     defaultValues: {
       name: "",
       type: "checking",
-      currency: "EUR",
+      currency: "CHF",
       balance: 0,
       description: "",
     }
@@ -149,9 +149,16 @@ export default function Accounts() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
+                            <SelectItem value="CHF">CHF (Fr.)</SelectItem>
                             <SelectItem value="EUR">EUR (€)</SelectItem>
                             <SelectItem value="USD">USD ($)</SelectItem>
                             <SelectItem value="GBP">GBP (£)</SelectItem>
+                            <SelectItem value="JPY">JPY (¥)</SelectItem>
+                            <SelectItem value="CAD">CAD ($)</SelectItem>
+                            <SelectItem value="AUD">AUD ($)</SelectItem>
+                            <SelectItem value="SEK">SEK (kr)</SelectItem>
+                            <SelectItem value="NOK">NOK (kr)</SelectItem>
+                            <SelectItem value="DKK">DKK (kr)</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
