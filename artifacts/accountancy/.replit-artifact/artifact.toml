@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Accountancy Manager"
+version = "1.0.0"
+id = "artifacts/accountancy"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 18943
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/accountancy run dev"
+
+[services.env]
+PORT = "18943"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/accountancy", "run", "build"]
+publicDir = "artifacts/accountancy/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

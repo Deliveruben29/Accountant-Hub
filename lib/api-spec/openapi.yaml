@@ -1,22 +1,29 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Accountancy Manager API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: transactions
+    description: Transaction management
+  - name: accounts
+    description: Account management
+  - name: statements
+    description: Statement upload and parsing
+  - name: dashboard
+    description: Dashboard summary data
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +31,268 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      summary: List all accounts
+      responses:
+        "200":
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      summary: Create a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+
+  /accounts/{id}:
+    delete:
+      operationId: deleteAccount
+      tags: [accounts]
+      summary: Delete an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Account deleted
+
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List transactions with optional filters
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: integer
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [income, expense, transfer]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionListResponse"
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      summary: Create a single transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransactionRequest"
+      responses:
+        "201":
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
+  /transactions/{id}:
+    put:
+      operationId: updateTransaction
+      tags: [transactions]
+      summary: Update a transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTransactionRequest"
+      responses:
+        "200":
+          description: Transaction updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+    delete:
+      operationId: deleteTransaction
+      tags: [transactions]
+      summary: Delete a transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Transaction deleted
+
+  /statements/upload:
+    post:
+      operationId: uploadStatement
+      tags: [statements]
+      summary: Upload a PDF or CSV statement for parsing
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                accountId:
+                  type: integer
+                  description: Target account ID
+              required:
+                - file
+                - accountId
+      responses:
+        "200":
+          description: Statement parsed and transactions imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatementUploadResponse"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/monthly:
+    get:
+      operationId: getMonthlyData
+      tags: [dashboard]
+      summary: Get monthly income/expense data for charts
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: integer
+        - name: months
+          in: query
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: Monthly breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthlyData"
+
+  /dashboard/categories:
+    get:
+      operationId: getCategoryBreakdown
+      tags: [dashboard]
+      summary: Get spending breakdown by category
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Category breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryBreakdown"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +303,247 @@ components:
       required:
         - status
 
+    Account:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+          enum: [checking, savings, credit, investment, other]
+        currency:
+          type: string
+          default: EUR
+        balance:
+          type: number
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - type
+        - currency
+        - balance
+        - createdAt
+
+    CreateAccountRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [checking, savings, credit, investment, other]
+        currency:
+          type: string
+          default: EUR
+        balance:
+          type: number
+          default: 0
+        description:
+          type: string
+          nullable: true
+      required:
+        - name
+        - type
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        accountId:
+          type: integer
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        amount:
+          type: number
+        type:
+          type: string
+          enum: [income, expense, transfer]
+        category:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        reference:
+          type: string
+          nullable: true
+        importedFromStatement:
+          type: boolean
+          default: false
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - accountId
+        - date
+        - description
+        - amount
+        - type
+        - category
+        - importedFromStatement
+        - createdAt
+
+    CreateTransactionRequest:
+      type: object
+      properties:
+        accountId:
+          type: integer
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        amount:
+          type: number
+        type:
+          type: string
+          enum: [income, expense, transfer]
+        category:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        reference:
+          type: string
+          nullable: true
+      required:
+        - accountId
+        - date
+        - description
+        - amount
+        - type
+        - category
+
+    UpdateTransactionRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        description:
+          type: string
+        amount:
+          type: number
+        type:
+          type: string
+          enum: [income, expense, transfer]
+        category:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        reference:
+          type: string
+          nullable: true
+
+    TransactionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - data
+        - total
+        - offset
+        - limit
+
+    StatementUploadResponse:
+      type: object
+      properties:
+        imported:
+          type: integer
+          description: Number of transactions imported
+        skipped:
+          type: integer
+          description: Number of rows skipped (invalid/duplicate)
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+      required:
+        - imported
+        - skipped
+        - transactions
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalIncome:
+          type: number
+        totalExpenses:
+          type: number
+        netBalance:
+          type: number
+        transactionCount:
+          type: integer
+        accountsCount:
+          type: integer
+        topCategory:
+          type: string
+          nullable: true
+        recentTransactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+      required:
+        - totalIncome
+        - totalExpenses
+        - netBalance
+        - transactionCount
+        - accountsCount
+        - recentTransactions
+
+    MonthlyData:
+      type: object
+      properties:
+        month:
+          type: string
+          description: Month in YYYY-MM format
+        income:
+          type: number
+        expenses:
+          type: number
+        net:
+          type: number
+      required:
+        - month
+        - income
+        - expenses
+        - net
+
+    CategoryBreakdown:
+      type: object
+      properties:
+        category:
+          type: string
+        amount:
+          type: number
+        count:
+          type: integer
+        percentage:
+          type: number
+      required:
+        - category
+        - amount
+        - count
+        - percentage

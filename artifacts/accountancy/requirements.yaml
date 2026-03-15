@@ -1,0 +1,21 @@
+packages:
+  "recharts": "For dashboard data visualization (bar charts, pie charts)"
+  "react-dropzone": "For drag and drop statement file uploads"
+  "date-fns": "For date formatting and manipulation"
+  "framer-motion": "For page transitions and premium interaction animations"
+  "react-hook-form": "For form state management"
+  "@hookform/resolvers": "For Zod schema validation in forms"
+  "zod": "For strict schema validation on forms"
+  "clsx": "For conditional class merging"
+  "tailwind-merge": "For tailwind class merging"
+  "lucide-react": "Standard icons"
+
+images:
+  - path: "artifacts/accountancy/public/images/logo.png"
+    description: "A minimal, geometric brand mark logo for a premium accountancy web app. Deep indigo and emerald green colors, transparent background, clean vector style."
+    aspect_ratio: "1:1"
+
+notes:
+  - Using generated Orval React Query hooks from @workspace/api-client-react
+  - Forms use Zod schemas that align with the generated API types
+  - File upload uses FormData matching the generated uploadStatement signature
