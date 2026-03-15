@@ -3,14 +3,15 @@ import { db, transactionsTable, accountsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import multer from "multer";
 import { parse as parseCsv } from "csv-parse/sync";
-import { createRequire } from "module";
-// Works in both ESM (dev/tsx) and CJS (production esbuild bundle)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _require: NodeRequire = typeof (globalThis as any).require === "function"
-  ? (globalThis as any).require
-  // @ts-ignore – __filename exists as a module-scoped variable in CJS runtime
-  : createRequire(typeof __filename !== "undefined" ? __filename : import.meta.url);
-const pdfParse = _require("pdf-parse") as (buffer: Buffer) => Promise<{ text: string }>;
+// Lazily loaded inside the route handler so dynamic import() works in both
+// ESM (tsx dev) and esbuild CJS (production bundle)
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mod: any = await import("pdf-parse");
+  const pdfParse: (buf: Buffer) => Promise<{ text: string }> = mod.default ?? mod;
+  const data = await pdfParse(buffer);
+  return data.text;
+}
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -332,8 +333,7 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
     } else if (file.mimetype === "application/pdf" || ext.endsWith(".pdf")) {
       let pdfText = "";
       try {
-        const data = await pdfParse(file.buffer);
-        pdfText = data.text;
+        pdfText = await extractPdfText(file.buffer);
       } catch {
         res.status(422).json({ error: "Could not read the PDF. Ensure it is a valid, non-password-protected PDF." });
         return;
