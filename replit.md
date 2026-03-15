@@ -11,7 +11,7 @@ A full-stack accountancy/bookkeeping web application built with React + Vite (fr
 - **Dashboard**: Summary cards (net balance, total income/expenses, transaction count), monthly income vs. expense bar chart, expense category breakdown pie chart, recent transactions list
 - **Transactions**: Full searchable and filterable transaction table with add/edit/delete support
 - **Manual Entry**: Add individual transactions (date, description, amount, type, category, notes, reference)
-- **Statement Upload**: Upload CSV or PDF bank statements — automatically parsed, categorized, and imported
+- **Statement Upload**: Upload CSV or PDF bank statements — automatically parsed, categorized, and imported. Dedicated PostFinance PDF parser handles Swiss-format statements (space-thousands amounts, DD.MM.YY dates, multi-line transaction blocks, Gutschrift/Lastschrift columns, POSTSCHALTERGESCHÄFT and all standard PostFinance transaction types)
 - **Accounts**: Manage multiple accounts (checking, savings, credit, investment, other) with currency and balance tracking; "Fix & Recalculate Balance" button repairs legacy misclassified data
 - **Profile**: Shows user avatar, name, email, role badge; language preference picker (saved to DB)
 - **Admin Panel**: User management table with role toggle (admin ↔ user), stats cards (total/admins/users)

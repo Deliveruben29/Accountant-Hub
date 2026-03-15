@@ -61,19 +61,27 @@ function guessCategory(description: string, isExpense: boolean): string {
   const desc = description.toLowerCase();
   if (desc.includes("salary") || desc.includes("payroll") || desc.includes("wage") || desc.includes("nomina")) return "Salary";
   if (desc.includes("rent") || desc.includes("lease") || desc.includes("mortgage") || desc.includes("alquiler")) return "Rent";
-  if (desc.includes("electric") || desc.includes("water") || desc.includes("utility") || desc.includes("internet") || desc.includes("telefon")) return "Utilities";
-  if (desc.includes("restaurant") || desc.includes("cafe") || desc.includes("grocery") || desc.includes("supermarket") || desc.includes("mercadona") || desc.includes("aldi") || desc.includes("lidl") || desc.includes("dallmayr")) return "Food";
-  if (desc.includes("flight") || desc.includes("train") || desc.includes("taxi") || desc.includes("uber") || desc.includes("sbb") || desc.includes("swiss air") || desc.includes("flixbus") || desc.includes("trainline") || desc.includes("transport") || desc.includes("getyourguide")) return "Travel";
+  // Swiss mobile / telecoms
+  if (desc.includes("salt mobile") || desc.includes("sunrise") || desc.includes("swisscom") || desc.includes("electric") || desc.includes("water") || desc.includes("utility") || desc.includes("internet") || desc.includes("telefon")) return "Utilities";
+  // Swiss groceries & supermarkets
+  if (desc.includes("volg") || desc.includes("coop") || desc.includes("migros") || desc.includes("denner") || desc.includes("spar") || desc.includes("manor") || desc.includes("aldi") || desc.includes("lidl") || desc.includes("dallmayr") || desc.includes("mercadona")) return "Food";
+  // Restaurants / fast food
+  if (desc.includes("burger king") || desc.includes("mcdonald") || desc.includes("rest.bar") || desc.includes("restaurant") || desc.includes("gastro") || desc.includes("cafe") || desc.includes("grocery") || desc.includes("supermarket") || desc.includes("lolly shop") || desc.includes("jingling")) return "Food";
+  // Swiss transport
+  if (desc.includes("schweizerische bundesb") || desc.includes("sbb") || desc.includes("taxi") || desc.includes("sumup *taxi") || desc.includes("flight") || desc.includes("train") || desc.includes("uber") || desc.includes("swiss air") || desc.includes("flixbus") || desc.includes("trainline") || desc.includes("transport") || desc.includes("getyourguide")) return "Travel";
   if (desc.includes("hotel") || desc.includes("booking.com") || desc.includes("airbnb")) return "Travel";
   if (desc.includes("tax") || desc.includes("vat") || desc.includes("iva")) return "Tax";
-  if (desc.includes("insurance") || desc.includes("seguro")) return "Insurance";
+  if (desc.includes("insurance") || desc.includes("seguro") || desc.includes("versicherung")) return "Insurance";
+  // Swiss pharmacy / healthcare
+  if (desc.includes("apotheke") || desc.includes("amavita") || desc.includes("health") || desc.includes("medical") || desc.includes("pharmacy") || desc.includes("doctor") || desc.includes("farmacia") || desc.includes("selecta")) return "Healthcare";
   if (desc.includes("replit") || desc.includes("anthropic") || desc.includes("google") || desc.includes("saas") || desc.includes("software") || desc.includes("capcut") || desc.includes("envato") || desc.includes("paypal") || desc.includes("viggle") || desc.includes("lipsync") || desc.includes("personality") || desc.includes("surfshark") || desc.includes("landr") || desc.includes("ardour")) return "Software";
   if (desc.includes("tinder") || desc.includes("dating") || desc.includes("parship")) return "Entertainment";
-  if (desc.includes("health") || desc.includes("medical") || desc.includes("pharmacy") || desc.includes("doctor") || desc.includes("farmacia")) return "Healthcare";
   if (desc.includes("card reload") || desc.includes("transfer") || desc.includes("traspaso")) return "Transfer";
   if (desc.includes("night") || desc.includes("leisure") || desc.includes("cinema") || desc.includes("club") || desc.includes("bar")) return "Entertainment";
   if (desc.includes("furniture") || desc.includes("matratzen") || desc.includes("ikea")) return "Household";
   if (desc.includes("vpn")) return "Software";
+  // Bank fees
+  if (desc.includes("bankpaket") || desc.includes("kontoführung") || desc.includes("gebühr")) return "Other";
   return isExpense ? "Other" : "Income";
 }
 
@@ -123,6 +131,192 @@ function parseCurrencyAmount(raw: string): { amount: number; negative: boolean }
   const amount = parseFloat(numStr);
   if (isNaN(amount)) return null;
   return { amount, negative };
+}
+
+// ─── POSTFINANCE PDF PARSER ──────────────────────────────────────────────────
+
+function isPostFinanceFormat(text: string): boolean {
+  return (
+    text.includes("PostFinance") ||
+    text.includes("POFICHBEXXX") ||
+    (text.includes("Gutschrift") && text.includes("Lastschrift") &&
+      /KAUF\/DIENSTLEISTUNG|BARGELDBEZUG|LASTSCHRIFT/.test(text))
+  );
+}
+
+function parsePostFinancePdfText(text: string): ParsedRow[] {
+  const rows: ParsedRow[] = [];
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+
+  // Convert DD.MM.YY → YYYY-MM-DD
+  const toDate = (d: string, m: string, y: string) => {
+    const year = parseInt(y) <= 50 ? `20${y}` : `19${y}`;
+    return `${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  };
+
+  // Swiss amount: digits with optional space-thousands, e.g. "11.80", "2 019.95"
+  const parseSwissAmt = (s: string) => parseFloat(s.replace(/ /g, ""));
+
+  // The dedicated AMOUNT line that closes each transaction block.
+  // Formats seen in the wild:
+  //   "01.05.25 11.80 30.04.25"
+  //   "21.50 01.05.25"
+  //   "15.90 01.05.25 2 019.95"
+  //   "02.05.25 100.00 02.05.25"
+  //   "04.05.25 1.10 04.05.25 1 691.20"
+  // Pattern: optional booking-date, AMOUNT, valuta-date, optional saldo
+  const AMOUNT_LINE = /^(?:(\d{2})\.(\d{2})\.(\d{2})\s+)?(\d{1,3}(?: \d{3})*\.\d{2})\s+(\d{2}\.\d{2}\.\d{2})(?:\s+\d{1,3}(?: \d{3})*\.\d{2})?$/;
+
+  // Lines to skip globally (page headers, footers, personal data, barcodes)
+  const GLOBAL_SKIP: RegExp[] = [
+    /PostFinanceAG|PostFinance AG/,
+    /Siewerdenbetreutvon|Sie werden betreut/,
+    /OscarMananesundTeam/,
+    /Telefon\+41|Telefon \+41/,
+    /www\.postfinance\.ch/,
+    /Kontoauszug\d|Kontoauszug \d/i,
+    /IBANCH\d|IBAN CH\d/i,
+    /Kontonummer\s*\d/i,
+    /BIC POFICH|BICPOFICH/i,
+    /Datum Saldo|Datum\s+Saldo/i,
+    /Seite[: ]\d|Seite\d/i,
+    /Datum:\s*\d{2}\.\d{2}\.\d{4}/i,
+    /Online-Einkäufe/i,
+    /Voraussetzung für/i,
+    /postfinance\.ch\/3dsecure/i,
+    /Privatkonto/,
+    /^-- \d+ of \d+ --$/,
+    /CH-\d{4} /,
+    /^A-PRIORITY$/,
+    /^P\.P\.\s*$/,
+    /^Post CH AG$/,
+    /^Herr$|^Frau$/i,
+    /Hohlgass|Wil ZH/i,
+    /Moya Giner|Ruben Moya/i,
+    /^8196 Wil ZH$/,
+    /^00\d{3,4}$/,            // barcode stamp (00656)
+    /^DE \d{6}\./,            // barcode stamp (DE 000030.)
+    /^\d{1,2}$/,              // lone 1-2 digit lines
+    /\bKontostand\b/i,        // opening / closing balance
+    /^Total\s+\d/i,           // totals row
+    /Auskunft darüber/i,
+    /Bitte überprüfen/i,
+    /^Freundliche Grüsse$/i,
+    /^CH-\d{4}/,
+  ];
+
+  // Transaction type → credit/debit classification
+  const TX_TYPES: Array<[RegExp, "income" | "expense" | "transfer"]> = [
+    [/^KAUF\/DIENSTLEISTUNG/i, "expense"],
+    [/^BARGELDBEZUG/i, "expense"],
+    [/^LASTSCHRIFT$/i, "expense"],
+    [/^GUTSCHRIFT$/i, "income"],
+    [/^DAUERAUFTRAG/i, "expense"],
+    [/^BONIFIKATION/i, "income"],
+    [/^VERGÜTUNG|^VERGUETUNG/i, "income"],
+    [/^ÜBERTRAG|^UBERTRAG/i, "transfer"],
+    [/^BELASTUNG/i, "expense"],
+    [/^AUFTRAG/i, "expense"],
+    [/^PREIS FÜR|^PREIS FUER/i, "expense"],         // bank fees
+    [/^POSTSCHALTERGESCHÄFT|^POSTSCHALTERGESCHAFT/i, "expense"], // post-office counter
+    [/^RÜCKÜBERWEISUNG|^RUCKUBERWEISUNG/i, "income"],
+    [/^EINZAHLUNG/i, "income"],
+  ];
+
+  // Noise patterns within a description block (lines to drop)
+  const DESC_NOISE: RegExp[] = [
+    /^KARTEN NR\./i,
+    /^CH\d{2}[\d ]{10,}/,   // IBAN (CH19 0900 ...)
+    /^\d{4} [A-ZÄÖÜ]/,      // Swiss/French ZIP + city (8098 ZÜRICH, 1020 RENENS VD)
+    /^\d{6,}$/,              // pure long numbers
+    /^[A-Z0-9_]{15,}$/,     // reference codes (25031400039348_MAERZ)
+    /^[0-9]{14,}/,           // timestamp strings
+    /^UBS SWITZERLAND|^UBS AG$/i,
+    /^CREDIT SUISSE/i,
+    /^RAIFFEISEN/i,
+    /^ZÜRCHER KANTONALBANK|^ZKB/i,
+    /^BAHNHOFSTRASSE\s+\d/i,
+    /^PARADEPLATZ/i,
+    /^FILIALE /i,            // PostFinance branches (FILIALE AUSSERSIHL)
+    /^SENDER REFERENZ/i,
+  ];
+
+  // State
+  let currentDate = "";
+  let txType: "income" | "expense" | "transfer" = "expense";
+  let descLines: string[] = [];
+  let inTx = false;
+  let skipNext = 0;
+
+  const commit = (amount: number, date: string) => {
+    if (!inTx || amount <= 0 || !date) { inTx = false; descLines = []; return; }
+    const description = descLines
+      .filter((l) => !DESC_NOISE.some((p) => p.test(l)))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim() || "PostFinance transaction";
+    rows.push({
+      date,
+      description,
+      amount,
+      type: txType,
+      category: guessCategory(description, txType !== "income"),
+    });
+    descLines = [];
+    inTx = false;
+  };
+
+  for (const raw of lines) {
+    if (GLOBAL_SKIP.some((p) => p.test(raw))) continue;
+    if (skipNext > 0) { skipNext--; continue; }
+
+    // SENDER REFERENZ: skip this line + next 2 (the reference codes)
+    if (/^SENDER REFERENZ:/i.test(raw)) { skipNext = 2; continue; }
+
+    // ── Amount line? ─────────────────────────────────────────────────────────
+    const amtMatch = raw.match(AMOUNT_LINE);
+    if (amtMatch) {
+      // amtMatch[1-3] = optional booking date (D,M,Y), [4] = amount, [5] = valuta DD.MM.YY
+      const amount = parseSwissAmt(amtMatch[4]);
+      let bookingDate = currentDate;
+      if (amtMatch[1]) {
+        bookingDate = toDate(amtMatch[1], amtMatch[2], amtMatch[3]);
+        currentDate = bookingDate;
+      }
+      // Fallback: parse valuta date as booking date
+      if (!bookingDate && amtMatch[5]) {
+        const [vd, vm, vy] = amtMatch[5].split(".");
+        bookingDate = toDate(vd, vm, vy);
+      }
+      commit(amount, bookingDate);
+      continue;
+    }
+
+    // ── New transaction type line? ────────────────────────────────────────────
+    let detectedType: "income" | "expense" | "transfer" | null = null;
+    for (const [pattern, t] of TX_TYPES) {
+      if (pattern.test(raw)) { detectedType = t; break; }
+    }
+
+    if (detectedType !== null) {
+      // Orphan tx without amount line (shouldn't happen but be safe)
+      if (inTx) { inTx = false; descLines = []; }
+      txType = detectedType;
+      inTx = true;
+      descLines = [];
+      // Some tx types carry useful description text on the same line
+      // e.g. "PREIS FÜR" → next line has "BANKPAKET SMART 04.2025"
+      // Nothing to extract from this line itself.
+      continue;
+    }
+
+    // ── Description continuation line ─────────────────────────────────────────
+    if (inTx && raw.length > 1) {
+      descLines.push(raw);
+    }
+  }
+
+  return rows;
 }
 
 // ─── PDF PARSER ─────────────────────────────────────────────────────────────
@@ -346,7 +540,9 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
         res.status(422).json({ error: "Could not read the PDF. Ensure it is a valid, non-password-protected PDF." });
         return;
       }
-      rows = parsePdfText(pdfText);
+      rows = isPostFinanceFormat(pdfText)
+        ? parsePostFinancePdfText(pdfText)
+        : parsePdfText(pdfText);
     } else {
       res.status(400).json({ error: "Unsupported file type. Please upload a CSV or PDF." });
       return;
