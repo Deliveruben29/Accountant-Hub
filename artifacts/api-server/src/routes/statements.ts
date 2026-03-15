@@ -216,7 +216,6 @@ function parsePostFinancePdfText(text: string): ParsedRow[] {
     [/^VERGÜTUNG|^VERGUETUNG/i, "income"],
     [/^ÜBERTRAG|^UBERTRAG/i, "transfer"],
     [/^BELASTUNG/i, "expense"],
-    [/^AUFTRAG/i, "expense"],
     [/^PREIS FÜR|^PREIS FUER/i, "expense"],         // bank fees
     [/^POSTSCHALTERGESCHÄFT|^POSTSCHALTERGESCHAFT/i, "expense"], // post-office counter
     [/^RÜCKÜBERWEISUNG|^RUCKUBERWEISUNG/i, "income"],
@@ -239,6 +238,9 @@ function parsePostFinancePdfText(text: string): ParsedRow[] {
     /^PARADEPLATZ/i,
     /^FILIALE /i,            // PostFinance branches (FILIALE AUSSERSIHL)
     /^SENDER REFERENZ/i,
+    /^AUFTRAGGEBER:?$/i,   // GUTSCHRIFT field label
+    /^MITTEILUNGEN:?$/i,   // GUTSCHRIFT field label
+    /^REFERENZEN:?$/i,     // GUTSCHRIFT field label
   ];
 
   // State
