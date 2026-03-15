@@ -43,7 +43,7 @@ router.get("/transactions", async (req, res) => {
       limit: parseInt(limit),
     });
   } catch (err) {
-    console.error("Error listing transactions:", err);
+    console.error("Error listing transactions:", err instanceof Error ? err.message : String(err));
     res.status(500).json({ error: "Failed to list transactions" });
   }
 });
@@ -75,8 +75,9 @@ router.post("/transactions", async (req, res) => {
 
     res.status(201).json(formatTransaction(transaction));
   } catch (err) {
-    console.error("Error creating transaction:", err);
-    res.status(500).json({ error: "Failed to create transaction" });
+    const msg = err instanceof Error ? err.message : JSON.stringify(err);
+    console.error("Error creating transaction:", msg);
+    res.status(400).json({ error: msg });
   }
 });
 
@@ -111,8 +112,9 @@ router.put("/transactions/:id", async (req, res) => {
 
     res.json(formatTransaction(updated));
   } catch (err) {
-    console.error("Error updating transaction:", err);
-    res.status(500).json({ error: "Failed to update transaction" });
+    const msg = err instanceof Error ? err.message : JSON.stringify(err);
+    console.error("Error updating transaction:", msg);
+    res.status(400).json({ error: msg });
   }
 });
 

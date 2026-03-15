@@ -148,7 +148,7 @@ export const ListTransactionsResponse = zod.object({
  */
 export const CreateTransactionBody = zod.object({
   accountId: zod.number(),
-  date: zod.date(),
+  date: zod.string(),
   description: zod.string(),
   amount: zod.number(),
   type: zod.enum(["income", "expense", "transfer"]),
@@ -165,7 +165,7 @@ export const UpdateTransactionParams = zod.object({
 });
 
 export const UpdateTransactionBody = zod.object({
-  date: zod.date().optional(),
+  date: zod.string().optional(),
   description: zod.string().optional(),
   amount: zod.number().optional(),
   type: zod.enum(["income", "expense", "transfer"]).optional(),
