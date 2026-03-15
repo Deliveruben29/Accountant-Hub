@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
-import { UploadCloud, FileText, CheckCircle2, FileWarning, ArrowRight } from "lucide-react";
+import { UploadCloud, FileText, CheckCircle2, ArrowRight, Loader2 } from "lucide-react";
 import { 
   useUploadStatement,
   useListAccounts,
@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 export default function UploadStatement() {
-  const { data: accounts } = useListAccounts();
+  const { data: accounts, isLoading: accountsLoading } = useListAccounts();
   const uploadMutation = useUploadStatement();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -33,13 +33,14 @@ export default function UploadStatement() {
     }
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({ 
+  const { getRootProps, getInputProps, isDragActive, isDragReject, open } = useDropzone({ 
     onDrop,
     accept: {
       'text/csv': ['.csv'],
       'application/pdf': ['.pdf']
     },
-    maxFiles: 1
+    maxFiles: 1,
+    noClick: true,
   });
 
   const handleUpload = async () => {
@@ -88,16 +89,30 @@ export default function UploadStatement() {
                 
                 <div className="space-y-3">
                   <label className="text-sm font-semibold text-foreground">Target Account</label>
-                  <Select value={accountId} onValueChange={setAccountId}>
-                    <SelectTrigger className="max-w-md bg-card">
-                      <SelectValue placeholder="Select an account to import to" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accounts?.map(acc => (
-                        <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {accountsLoading ? (
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm h-10">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading accounts…
+                    </div>
+                  ) : accounts && accounts.length === 0 ? (
+                    <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-sm max-w-md">
+                      <span className="text-amber-700 dark:text-amber-400 font-medium">No accounts found.</span>
+                      <a href="/accounts" className="text-primary underline underline-offset-2 hover:no-underline font-medium">
+                        Create one first →
+                      </a>
+                    </div>
+                  ) : (
+                    <Select value={accountId} onValueChange={setAccountId}>
+                      <SelectTrigger className="max-w-md bg-card">
+                        <SelectValue placeholder="Select an account to import to" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts?.map(acc => (
+                          <SelectItem key={acc.id} value={String(acc.id)}>{acc.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 <div 
@@ -133,7 +148,7 @@ export default function UploadStatement() {
                       <p className="text-muted-foreground max-w-xs mb-6">
                         Support for PDF and CSV bank statements. We'll automatically extract and categorize transactions.
                       </p>
-                      <Button variant="secondary" className="pointer-events-none" disabled={!accountId}>
+                      <Button variant="secondary" disabled={!accountId} onClick={(e) => { e.stopPropagation(); open(); }}>
                         Browse Files
                       </Button>
                     </>
