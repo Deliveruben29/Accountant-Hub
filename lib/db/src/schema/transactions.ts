@@ -2,6 +2,7 @@ import { pgTable, serial, integer, text, numeric, date, boolean, timestamp } fro
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { accountsTable } from "./accounts";
+import { statementImportsTable } from "./statement-imports";
 
 export const transactionsTable = pgTable("transactions", {
   id: serial("id").primaryKey(),
@@ -14,6 +15,7 @@ export const transactionsTable = pgTable("transactions", {
   notes: text("notes"),
   reference: text("reference"),
   importedFromStatement: boolean("imported_from_statement").notNull().default(false),
+  statementImportId: integer("statement_import_id").references(() => statementImportsTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

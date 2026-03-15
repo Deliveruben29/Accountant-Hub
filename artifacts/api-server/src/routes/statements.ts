@@ -1,6 +1,6 @@
 import { Router, type IRouter, Request, Response } from "express";
-import { db, transactionsTable, accountsTable } from "@workspace/db";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { db, transactionsTable, accountsTable, statementImportsTable } from "@workspace/db";
+import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import multer from "multer";
 import { parse as parseCsv } from "csv-parse/sync";
 // pdf-parse v2 uses a class-based API: new PDFParse({ data: buffer }).getText()
@@ -530,6 +530,70 @@ function parseCsvStatement(buffer: Buffer): ParsedRow[] {
   return rows;
 }
 
+// ─── STATEMENT IMPORTS: LIST & DELETE ────────────────────────────────────────
+
+router.get("/statement-imports", async (req: Request, res: Response) => {
+  try {
+    const accountId = req.query.accountId ? parseInt(req.query.accountId as string) : undefined;
+    const where = accountId ? eq(statementImportsTable.accountId, accountId) : undefined;
+    const imports = await db
+      .select()
+      .from(statementImportsTable)
+      .where(where)
+      .orderBy(desc(statementImportsTable.importedAt));
+    res.json(imports);
+  } catch (err) {
+    console.error("Error listing imports:", err instanceof Error ? err.message : String(err));
+    res.status(500).json({ error: "Failed to list imports" });
+  }
+});
+
+router.delete("/statement-imports/:id", async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+    // Fetch the import record first so we know which account to recalculate
+    const [record] = await db
+      .select()
+      .from(statementImportsTable)
+      .where(eq(statementImportsTable.id, id))
+      .limit(1);
+
+    if (!record) { res.status(404).json({ error: "Import not found" }); return; }
+
+    // Delete all transactions linked to this import batch
+    await db
+      .delete(transactionsTable)
+      .where(eq(transactionsTable.statementImportId, id));
+
+    // Delete the import record itself
+    await db.delete(statementImportsTable).where(eq(statementImportsTable.id, id));
+
+    // Recalculate account balance
+    await db
+      .update(accountsTable)
+      .set({
+        balance: sql`(
+          SELECT COALESCE(SUM(
+            CASE WHEN ${transactionsTable.type} = 'income'
+              THEN ${transactionsTable.amount}::numeric
+              ELSE -${transactionsTable.amount}::numeric
+            END
+          ), 0)
+          FROM ${transactionsTable}
+          WHERE ${transactionsTable.accountId} = ${record.accountId}
+        )`,
+      })
+      .where(eq(accountsTable.id, record.accountId));
+
+    res.json({ deleted: true, importId: id, accountId: record.accountId });
+  } catch (err) {
+    console.error("Error deleting import:", err instanceof Error ? err.message : String(err));
+    res.status(500).json({ error: "Failed to delete import" });
+  }
+});
+
 // ─── UPLOAD ROUTE ────────────────────────────────────────────────────────────
 
 router.post("/statements/upload", upload.single("file"), async (req: Request, res: Response) => {
@@ -638,6 +702,19 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       return;
     }
 
+    // Record the import batch
+    const [importRecord] = await db
+      .insert(statementImportsTable)
+      .values({
+        accountId,
+        filename: file.originalname,
+        txImported: newRows.length,
+        txSkipped: skipped,
+        dateFrom: minDate,
+        dateTo: maxDate,
+      })
+      .returning();
+
     const inserted = await db
       .insert(transactionsTable)
       .values(
@@ -650,6 +727,7 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
           category: r.category,
           reference: r.reference ?? null,
           importedFromStatement: true,
+          statementImportId: importRecord.id,
         }))
       )
       .returning();
@@ -674,6 +752,7 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
     res.json({
       imported: inserted.length,
       skipped,
+      importId: importRecord.id,
       transactions: inserted.map((t) => ({ ...t, amount: parseFloat(t.amount) })),
     });
   } catch (err) {
