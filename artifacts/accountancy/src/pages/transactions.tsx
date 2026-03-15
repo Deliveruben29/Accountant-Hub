@@ -44,8 +44,17 @@ type TxFormValues = z.infer<typeof txSchema>;
 
 export default function Transactions() {
   const [page] = useState(0);
+  const [filterAccountId, setFilterAccountId] = useState<number | undefined>(undefined);
+  const [filterType, setFilterType] = useState<string>("");
+  const [search, setSearch] = useState("");
+
   const { data: accountsData } = useListAccounts();
-  const { data: txData, isLoading } = useListTransactions({ offset: page * 50, limit: 50 });
+  const { data: txData, isLoading } = useListTransactions({
+    offset: page * 100,
+    limit: 100,
+    ...(filterAccountId ? { accountId: filterAccountId } : {}),
+    ...(filterType ? { type: filterType } : {}),
+  });
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
   const deleteMutation = useDeleteTransaction();
@@ -272,13 +281,42 @@ export default function Transactions() {
 
       <Card className="flex-1 flex flex-col shadow-sm border-border/50 overflow-hidden">
         <div className="p-4 border-b border-border/50 flex flex-wrap gap-3 bg-muted/20">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <div className="relative flex-1 min-w-[180px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input className="pl-9 bg-card border-border/80" placeholder="Search transactions..." />
+            <Input
+              className="pl-9 bg-card border-border/80"
+              placeholder="Search transactions..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-          <Button variant="outline" className="gap-2">
-            <Filter className="w-4 h-4" /> Filters
-          </Button>
+          <Select value={filterAccountId ? String(filterAccountId) : "all"} onValueChange={(v) => setFilterAccountId(v === "all" ? undefined : Number(v))}>
+            <SelectTrigger className="w-[160px] bg-card border-border/80">
+              <SelectValue placeholder="All accounts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All accounts</SelectItem>
+              {accounts.map(a => (
+                <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterType || "all"} onValueChange={(v) => setFilterType(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-[130px] bg-card border-border/80">
+              <SelectValue placeholder="All types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="income">Income</SelectItem>
+              <SelectItem value="expense">Expense</SelectItem>
+              <SelectItem value="transfer">Transfer</SelectItem>
+            </SelectContent>
+          </Select>
+          {(filterAccountId || filterType || search) && (
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setFilterAccountId(undefined); setFilterType(""); setSearch(""); }}>
+              <Filter className="w-3 h-3 mr-1" /> Clear filters
+            </Button>
+          )}
         </div>
         
         <div className="flex-1 overflow-auto">
@@ -301,7 +339,9 @@ export default function Transactions() {
                   </TableRow>
                 ))
               ) : txData?.data && txData.data.length > 0 ? (
-                txData.data.map((tx) => (
+                txData.data
+                .filter(tx => !search || tx.description.toLowerCase().includes(search.toLowerCase()))
+                .map((tx) => (
                   <TableRow key={tx.id} className="group border-border/30 hover:bg-muted/30 transition-colors">
                     <TableCell className="font-medium whitespace-nowrap">{formatDate(tx.date)}</TableCell>
                     <TableCell>

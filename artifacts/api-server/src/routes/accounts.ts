@@ -104,6 +104,23 @@ router.post("/accounts/:id/recalculate", async (req, res) => {
   }
 });
 
+router.delete("/accounts/:id/transactions", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+    const deleted = await db
+      .delete(transactionsTable)
+      .where(eq(transactionsTable.accountId, id))
+      .returning({ id: transactionsTable.id });
+    // Reset balance to 0
+    await db.update(accountsTable).set({ balance: "0" }).where(eq(accountsTable.id, id));
+    res.json({ deleted: deleted.length });
+  } catch (err) {
+    console.error("Error clearing transactions:", err);
+    res.status(500).json({ error: "Failed to clear transactions" });
+  }
+});
+
 router.delete("/accounts/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);

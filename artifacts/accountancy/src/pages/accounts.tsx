@@ -3,20 +3,21 @@ import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Landmark, Plus, CreditCard, PiggyBank, Landmark as InvestmentIcon, Building, RefreshCw } from "lucide-react";
+import { Landmark, Plus, CreditCard, PiggyBank, Landmark as InvestmentIcon, Building, RefreshCw, Trash2 } from "lucide-react";
 import { 
   useListAccounts, 
   useCreateAccount,
   AccountType
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getListAccountsQueryKey } from "@workspace/api-client-react";
+import { getListAccountsQueryKey, getListTransactionsQueryKey } from "@workspace/api-client-react";
 
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +40,23 @@ export default function Accounts() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [recalculating, setRecalculating] = useState<number | null>(null);
+  const [clearing, setClearing] = useState<number | null>(null);
+
+  const clearTransactions = async (accountId: number) => {
+    setClearing(accountId);
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/transactions`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      toast({ title: "Transactions cleared", description: `Deleted ${data.deleted} transaction(s). Ready to re-import.` });
+    } catch {
+      toast({ title: "Failed to clear transactions", variant: "destructive" });
+    } finally {
+      setClearing(null);
+    }
+  };
 
   const recalculateBalance = async (accountId: number) => {
     setRecalculating(accountId);
@@ -246,7 +264,7 @@ export default function Accounts() {
                     {formatCurrency(account.balance, account.currency)}
                   </div>
                 </CardContent>
-                <CardFooter className="pt-0 pb-4">
+                <CardFooter className="pt-0 pb-4 flex flex-col gap-1 items-start">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -257,6 +275,36 @@ export default function Accounts() {
                     <RefreshCw className={`w-3 h-3 mr-1.5 ${recalculating === account.id ? "animate-spin" : ""}`} />
                     {recalculating === account.id ? "Recalculating…" : "Fix & Recalculate Balance"}
                   </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+                        disabled={clearing === account.id}
+                      >
+                        <Trash2 className="w-3 h-3 mr-1.5" />
+                        {clearing === account.id ? "Clearing…" : "Clear All Transactions"}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Clear all transactions?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently delete all transactions for <strong>{account.name}</strong> and reset its balance to CHF 0. Use this to fix a bad import, then re-upload the statement. This cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={() => clearTransactions(account.id)}
+                        >
+                          Yes, clear all
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </CardFooter>
               </Card>
             </motion.div>
