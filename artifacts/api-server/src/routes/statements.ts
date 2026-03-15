@@ -1,6 +1,6 @@
 import { Router, type IRouter, Request, Response } from "express";
 import { db, transactionsTable, accountsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql } from "drizzle-orm";
 import multer from "multer";
 import { parse as parseCsv } from "csv-parse/sync";
 // pdf-parse v2 uses a class-based API: new PDFParse({ data: buffer }).getText()
@@ -584,10 +584,64 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       return;
     }
 
+    // ── Deduplication ────────────────────────────────────────────────────────
+    // Fetch all existing transactions for this account that fall within the
+    // date range of the parsed file so we can skip exact duplicates.
+    // A duplicate is defined as same (date, amount rounded to 2dp, type).
+    // This makes re-uploading any statement completely safe.
+    const dates = rows.map((r) => r.date).sort();
+    const minDate = dates[0];
+    const maxDate = dates[dates.length - 1];
+
+    const existing = await db
+      .select({
+        date: transactionsTable.date,
+        amount: transactionsTable.amount,
+        type: transactionsTable.type,
+      })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.accountId, accountId),
+          gte(transactionsTable.date, minDate),
+          lte(transactionsTable.date, maxDate)
+        )
+      );
+
+    // Build a set of "date|amount|type" fingerprints already in the DB
+    const existingSet = new Set(
+      existing.map((e) => `${e.date}|${parseFloat(e.amount).toFixed(2)}|${e.type}`)
+    );
+
+    // Keep track of fingerprints seen within this batch so that two identical
+    // rows in the same PDF only get inserted once (e.g. same ATM withdrawal
+    // appearing twice on the same day for the same amount — still allowed if
+    // the date changes; only exact same-day duplicates are suppressed).
+    const batchSeen = new Set<string>();
+
+    const newRows = rows.filter((r) => {
+      const key = `${r.date}|${r.amount.toFixed(2)}|${r.type}`;
+      if (existingSet.has(key) || batchSeen.has(key)) return false;
+      batchSeen.add(key);
+      return true;
+    });
+
+    const skipped = rows.length - newRows.length;
+
+    if (newRows.length === 0) {
+      res.json({
+        imported: 0,
+        skipped,
+        transactions: [],
+        message: `All ${skipped} transaction(s) from this file already exist for this account — nothing new to import.`,
+      });
+      return;
+    }
+
     const inserted = await db
       .insert(transactionsTable)
       .values(
-        rows.map((r) => ({
+        newRows.map((r) => ({
           accountId,
           date: r.date,
           description: r.description,
@@ -600,8 +654,7 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       )
       .returning();
 
-    // Recalculate account balance from ALL transactions (not just imported ones)
-    // This is idempotent — safe to re-import the same statement
+    // Recalculate account balance from ALL transactions (idempotent)
     await db
       .update(accountsTable)
       .set({
@@ -620,7 +673,7 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
 
     res.json({
       imported: inserted.length,
-      skipped: rows.length - inserted.length,
+      skipped,
       transactions: inserted.map((t) => ({ ...t, amount: parseFloat(t.amount) })),
     });
   } catch (err) {
