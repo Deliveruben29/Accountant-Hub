@@ -19,37 +19,203 @@ interface ParsedRow {
   reference?: string;
 }
 
-function guessCategory(description: string, amount: number): string {
+// Map statement category names to our internal category names
+const CATEGORY_MAP: Record<string, string> = {
+  transfer: "Transfer",
+  traspaso: "Transfer",
+  personal: "Entertainment",
+  transport: "Travel",
+  household: "Household",
+  leisure: "Entertainment",
+  "it services": "Software",
+  "hotel booking": "Travel",
+  viajes: "Travel",
+  salary: "Salary",
+  sales: "Sales",
+  rent: "Rent",
+  utilities: "Utilities",
+  insurance: "Insurance",
+  healthcare: "Healthcare",
+  tax: "Tax",
+  "office supplies": "Office Supplies",
+  refund: "Refund",
+};
+
+function mapCategory(raw: string): string | null {
+  const key = raw.toLowerCase().trim();
+  return CATEGORY_MAP[key] ?? null;
+}
+
+function guessCategory(description: string, isExpense: boolean): string {
   const desc = description.toLowerCase();
-  if (desc.includes("salary") || desc.includes("payroll") || desc.includes("wage")) return "Salary";
-  if (desc.includes("rent") || desc.includes("lease") || desc.includes("mortgage")) return "Rent";
-  if (desc.includes("electric") || desc.includes("water") || desc.includes("gas") || desc.includes("utility") || desc.includes("internet")) return "Utilities";
-  if (desc.includes("food") || desc.includes("restaurant") || desc.includes("cafe") || desc.includes("grocery") || desc.includes("supermarket")) return "Food";
-  if (desc.includes("transport") || desc.includes("taxi") || desc.includes("uber") || desc.includes("train") || desc.includes("flight") || desc.includes("fuel")) return "Travel";
+  if (desc.includes("salary") || desc.includes("payroll") || desc.includes("wage") || desc.includes("nomina")) return "Salary";
+  if (desc.includes("rent") || desc.includes("lease") || desc.includes("mortgage") || desc.includes("alquiler")) return "Rent";
+  if (desc.includes("electric") || desc.includes("water") || desc.includes("utility") || desc.includes("internet") || desc.includes("telefon")) return "Utilities";
+  if (desc.includes("restaurant") || desc.includes("cafe") || desc.includes("grocery") || desc.includes("supermarket") || desc.includes("mercadona") || desc.includes("aldi") || desc.includes("lidl") || desc.includes("dallmayr")) return "Food";
+  if (desc.includes("flight") || desc.includes("train") || desc.includes("taxi") || desc.includes("uber") || desc.includes("sbb") || desc.includes("swiss air") || desc.includes("flixbus") || desc.includes("trainline") || desc.includes("transport") || desc.includes("getyourguide")) return "Travel";
+  if (desc.includes("hotel") || desc.includes("booking.com") || desc.includes("airbnb")) return "Travel";
   if (desc.includes("tax") || desc.includes("vat") || desc.includes("iva")) return "Tax";
-  if (desc.includes("insurance")) return "Insurance";
-  if (desc.includes("office") || desc.includes("supplies") || desc.includes("stationery")) return "Office Supplies";
-  if (desc.includes("software") || desc.includes("subscription") || desc.includes("license")) return "Software";
-  if (desc.includes("health") || desc.includes("medical") || desc.includes("pharmacy") || desc.includes("doctor")) return "Healthcare";
-  if (desc.includes("entertainment") || desc.includes("cinema") || desc.includes("sport")) return "Entertainment";
-  if (desc.includes("sales") || desc.includes("invoice") || desc.includes("payment received")) return "Sales";
-  if (desc.includes("refund") || desc.includes("reimbursement")) return "Refund";
-  return amount > 0 ? "Income" : "Other";
+  if (desc.includes("insurance") || desc.includes("seguro")) return "Insurance";
+  if (desc.includes("replit") || desc.includes("anthropic") || desc.includes("google") || desc.includes("saas") || desc.includes("software") || desc.includes("capcut") || desc.includes("envato") || desc.includes("paypal") || desc.includes("viggle") || desc.includes("lipsync") || desc.includes("personality") || desc.includes("surfshark") || desc.includes("landr") || desc.includes("ardour")) return "Software";
+  if (desc.includes("tinder") || desc.includes("dating") || desc.includes("parship")) return "Entertainment";
+  if (desc.includes("health") || desc.includes("medical") || desc.includes("pharmacy") || desc.includes("doctor") || desc.includes("farmacia")) return "Healthcare";
+  if (desc.includes("card reload") || desc.includes("transfer") || desc.includes("traspaso")) return "Transfer";
+  if (desc.includes("night") || desc.includes("leisure") || desc.includes("cinema") || desc.includes("club") || desc.includes("bar")) return "Entertainment";
+  if (desc.includes("furniture") || desc.includes("matratzen") || desc.includes("ikea")) return "Household";
+  if (desc.includes("vpn")) return "Software";
+  return isExpense ? "Other" : "Income";
 }
 
 function parseDateFlexible(raw: string): string | null {
   if (!raw) return null;
-  // Try ISO format
+  raw = raw.trim();
+  // ISO: YYYY-MM-DD
   const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) return raw.slice(0, 10);
-  // Try DD/MM/YYYY or DD-MM-YYYY
-  const euMatch = raw.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+  // EU: D/M/YYYY or DD/MM/YYYY or with - or .
+  const euMatch = raw.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
   if (euMatch) return `${euMatch[3]}-${euMatch[2].padStart(2, "0")}-${euMatch[1].padStart(2, "0")}`;
-  // Try MM/DD/YYYY
-  const usMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (usMatch) return `${usMatch[3]}-${usMatch[1].padStart(2, "0")}-${usMatch[2].padStart(2, "0")}`;
   return null;
 }
+
+// Parse a currency amount like CHF50.00, -CHF50.00, -EUR1,234.56, $50, etc.
+function parseCurrencyAmount(raw: string): { amount: number; negative: boolean } | null {
+  const match = raw.trim().match(/^(-?)\s*(?:[A-Z]{2,3}|[$€£¥])\s*(-?)([0-9]{1,3}(?:[,.']\d{3})*(?:[.,]\d{1,2})?)$/i);
+  if (!match) return null;
+  const negative = match[1] === "-" || match[2] === "-";
+  let numStr = match[3];
+  // Determine decimal separator
+  const lastDot = numStr.lastIndexOf(".");
+  const lastComma = numStr.lastIndexOf(",");
+  if (lastDot !== -1 && lastComma !== -1) {
+    if (lastComma > lastDot) {
+      // European: 1.234,56
+      numStr = numStr.replace(/\./g, "").replace(",", ".");
+    } else {
+      // US: 1,234.56
+      numStr = numStr.replace(/,/g, "");
+    }
+  } else if (lastComma !== -1) {
+    const parts = numStr.split(",");
+    if (parts.length === 2 && parts[1].length <= 2) {
+      numStr = numStr.replace(",", ".");
+    } else {
+      numStr = numStr.replace(/,/g, "");
+    }
+  } else if (lastDot !== -1) {
+    const parts = numStr.split(".");
+    // If decimal part has 3 digits it's a thousand separator (1.234)
+    if (parts.length === 2 && parts[1].length === 3 && parts[0].length > 0) {
+      numStr = numStr.replace(/\./g, "");
+    }
+  }
+  const amount = parseFloat(numStr);
+  if (isNaN(amount)) return null;
+  return { amount, negative };
+}
+
+// ─── PDF PARSER ─────────────────────────────────────────────────────────────
+
+// Detect lines that are header rows (contain column name keywords)
+const HEADER_KEYWORDS = /ID_Transacción|Fecha|Concepto|Categoría|Entidad|Ingreso|Gasto|Date|Description|Amount|Balance|Debit|Credit/i;
+
+// Known category words found in typical statement formats — matched as words within a line
+const KNOWN_CATEGORY_PATTERN = /\b(IT Services|Hotel Booking|Office Supplies|Transfer|Traspaso|Personal|Transport|Household|Leisure|Viajes|Salary|Rent|Utilities|Insurance|Healthcare|Tax|Refund|Sales)\b/gi;
+
+function parsePdfText(text: string): ParsedRow[] {
+  const rows: ParsedRow[] = [];
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter((l) => l.length > 3);
+
+  for (const line of lines) {
+    // Skip header lines
+    if (HEADER_KEYWORDS.test(line)) continue;
+
+    // Find a date in the line (D/M/YYYY or DD/MM/YYYY or YYYY-MM-DD)
+    const dateMatch = line.match(/\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}|\d{4}-\d{2}-\d{2})\b/);
+    if (!dateMatch) continue;
+    const parsedDate = parseDateFlexible(dateMatch[1]);
+    if (!parsedDate) continue;
+
+    // Find a currency amount in the line (handles CHF, EUR, USD, GBP, $, €, £)
+    const amountMatch = line.match(/(-?)\s*(CHF|EUR|USD|GBP|[$€£¥])\s*(-?)(\d{1,3}(?:[,.']\d{3})*(?:[.,]\d{1,2})?)/i);
+    if (!amountMatch) continue;
+
+    const isNegative = amountMatch[1] === "-" || amountMatch[3] === "-";
+    let numStr = amountMatch[4];
+
+    // Normalize decimal/thousand separators
+    const lastDot = numStr.lastIndexOf(".");
+    const lastComma = numStr.lastIndexOf(",");
+    if (lastDot !== -1 && lastComma !== -1) {
+      numStr = lastComma > lastDot
+        ? numStr.replace(/\./g, "").replace(",", ".")
+        : numStr.replace(/,/g, "");
+    } else if (lastComma !== -1) {
+      const parts = numStr.split(",");
+      numStr = (parts.length === 2 && parts[1].length <= 2)
+        ? numStr.replace(",", ".")
+        : numStr.replace(/,/g, "");
+    } else if (lastDot !== -1) {
+      const parts = numStr.split(".");
+      if (parts.length === 2 && parts[1].length === 3 && parts[0].length > 0) {
+        numStr = numStr.replace(/\./g, "");
+      }
+    }
+    const amount = parseFloat(numStr);
+    if (isNaN(amount) || amount === 0) continue;
+
+    // Extract reference ID (e.g. TBF-001, REF-1234)
+    const refMatch = line.match(/\b([A-Z]{2,6}-\d{3,})/i);
+    const reference = refMatch ? refMatch[1] : undefined;
+
+    // Strip date, amount (with currency), reference, and month names from the line
+    const MONTH_NAMES = /\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|january|february|march|april|may|june|july|august|september|october|november|december)\b/gi;
+    let remaining = line
+      .replace(dateMatch[0], "")
+      .replace(amountMatch[0], "")
+      .replace(MONTH_NAMES, "")
+      .replace(refMatch ? refMatch[0] : "", "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // Find a known category word within the remaining text (word-boundary match)
+    KNOWN_CATEGORY_PATTERN.lastIndex = 0;
+    const catMatch = KNOWN_CATEGORY_PATTERN.exec(remaining);
+    let category: string | null = null;
+    if (catMatch) {
+      category = mapCategory(catMatch[1]);
+      // Remove only that single category word from the remaining description
+      remaining = remaining.replace(catMatch[0], "").replace(/\s+/g, " ").trim();
+    }
+
+    const description = remaining || "Imported transaction";
+
+    // Determine type: negative = transfer, positive = expense (or income if labeled so)
+    let type: "income" | "expense" | "transfer";
+    if (isNegative) {
+      type = "transfer";
+    } else {
+      const descLower = description.toLowerCase();
+      const isIncome = descLower.includes("salary") || descLower.includes("wage") || descLower.includes("nomina")
+        || descLower.includes("payment received") || descLower.includes("refund") || descLower.includes("income")
+        || category === "Salary" || category === "Sales";
+      type = isIncome ? "income" : "expense";
+    }
+
+    if (!category) {
+      category = guessCategory(description, type !== "income");
+    }
+
+    rows.push({ date: parsedDate, description, amount, type, category, reference });
+  }
+
+  return rows;
+}
+
+// ─── CSV PARSER ─────────────────────────────────────────────────────────────
 
 function parseCsvStatement(buffer: Buffer): ParsedRow[] {
   const text = buffer.toString("utf-8");
@@ -67,53 +233,71 @@ function parseCsvStatement(buffer: Buffer): ParsedRow[] {
 
   const rows: ParsedRow[] = [];
   for (const rec of records) {
-    const keys = Object.keys(rec).map((k) => k.toLowerCase());
+    const originalKeys = Object.keys(rec);
+    const keyMap: Record<string, string> = {};
+    for (const k of originalKeys) keyMap[k.toLowerCase().trim()] = k;
 
-    const dateKey = keys.find((k) => k.includes("date") || k === "datum" || k === "data");
-    const descKey = keys.find((k) => k.includes("desc") || k.includes("narr") || k.includes("detail") || k.includes("concept") || k.includes("memo") || k.includes("note"));
-    const amountKey = keys.find((k) => k.includes("amount") || k.includes("importe") || k.includes("value") || k === "credit" || k === "debit" || k === "importe");
-    const creditKey = keys.find((k) => k === "credit" || k.includes("credit") || k.includes("inflow") || k.includes("income"));
-    const debitKey = keys.find((k) => k === "debit" || k.includes("debit") || k.includes("outflow") || k.includes("expense"));
-    const refKey = keys.find((k) => k.includes("ref") || k.includes("id") || k.includes("transaction"));
+    const getKey = (test: (k: string) => boolean) => Object.keys(keyMap).find(test);
+    const getVal = (k: string | undefined) => (k ? rec[keyMap[k]] ?? "" : "").trim();
 
-    const getRaw = (key: string | undefined) => (key ? rec[Object.keys(rec).find((k) => k.toLowerCase() === key) ?? ""] ?? "" : "");
+    const dateKey = getKey((k) => /fecha|date|datum|data/.test(k));
+    const descKey = getKey((k) => /concepto|descripci|desc|narr|detail|memo|note/.test(k));
+    const catKey = getKey((k) => /categor/.test(k));
+    const refKey = getKey((k) => /id_trans|id|ref|transac/.test(k));
+    const providerKey = getKey((k) => /entidad|proveedor|provider|merchant/.test(k));
+    const amountKey = getKey((k) => /ingreso|gasto|importe|amount|value/.test(k));
+    const creditKey = getKey((k) => k === "credit" || /inflow|income/.test(k));
+    const debitKey = getKey((k) => k === "debit" || /outflow|expense/.test(k));
 
-    const rawDate = getRaw(dateKey);
+    const rawDate = getVal(dateKey);
     const parsedDate = parseDateFlexible(rawDate);
     if (!parsedDate) continue;
 
-    const desc = getRaw(descKey) || "Imported transaction";
+    const concept = getVal(descKey);
+    const provider = getVal(providerKey);
+    const description = [concept, provider].filter(Boolean).join(" – ") || "Imported transaction";
+    const rawCategory = getVal(catKey);
+    const reference = getVal(refKey) || undefined;
 
     let amount = 0;
     let type: "income" | "expense" | "transfer" = "expense";
 
     if (creditKey && debitKey) {
-      const credit = parseFloat(getRaw(creditKey).replace(/[, ]/g, "") || "0");
-      const debit = parseFloat(getRaw(debitKey).replace(/[, ]/g, "") || "0");
+      const creditRaw = getVal(creditKey).replace(/[^\d.,-]/g, "");
+      const debitRaw = getVal(debitKey).replace(/[^\d.,-]/g, "");
+      const credit = parseFloat(creditRaw || "0");
+      const debit = parseFloat(debitRaw || "0");
       if (credit > 0) { amount = credit; type = "income"; }
       else if (debit > 0) { amount = debit; type = "expense"; }
       else continue;
     } else if (amountKey) {
-      const raw = getRaw(amountKey).replace(/[, ]/g, "");
-      amount = parseFloat(raw);
-      if (isNaN(amount)) continue;
-      if (amount > 0) type = "income";
-      else { amount = Math.abs(amount); type = "expense"; }
+      // Strip currency prefix then parse
+      const rawAmt = getVal(amountKey).replace(/[A-Z]{2,3}/gi, "").trim();
+      const numStr = rawAmt.replace(/[^\d.,-]/g, "");
+      // Detect sign
+      const negative = rawAmt.startsWith("-") || getVal(amountKey).trimStart().startsWith("-");
+      const parsed = parseFloat(numStr.replace(",", "."));
+      if (isNaN(parsed) || parsed === 0) continue;
+      amount = Math.abs(parsed);
+      type = negative ? "transfer" : "expense";
+      // Check for explicit income indicators
+      const descLower = description.toLowerCase();
+      if (!negative && (descLower.includes("salary") || descLower.includes("income") || descLower.includes("payment received"))) {
+        type = "income";
+      }
     } else {
       continue;
     }
 
-    rows.push({
-      date: parsedDate,
-      description: desc,
-      amount,
-      type,
-      category: guessCategory(desc, type === "income" ? amount : -amount),
-      reference: getRaw(refKey) || undefined,
-    });
+    // Resolve category: use statement's own category first, then guess
+    const category = mapCategory(rawCategory) ?? guessCategory(description, type !== "income");
+
+    rows.push({ date: parsedDate, description, amount, type, category, reference });
   }
   return rows;
 }
+
+// ─── UPLOAD ROUTE ────────────────────────────────────────────────────────────
 
 router.post("/statements/upload", upload.single("file"), async (req: Request, res: Response) => {
   try {
@@ -136,41 +320,32 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
     }
 
     let rows: ParsedRow[] = [];
+    const ext = file.originalname.toLowerCase();
 
-    if (file.mimetype === "text/csv" || file.originalname.endsWith(".csv")) {
+    if (file.mimetype === "text/csv" || ext.endsWith(".csv")) {
       rows = parseCsvStatement(file.buffer);
-    } else if (file.mimetype === "application/pdf" || file.originalname.endsWith(".pdf")) {
+    } else if (file.mimetype === "application/pdf" || ext.endsWith(".pdf")) {
       let pdfText = "";
       try {
         const data = await pdfParse(file.buffer);
         pdfText = data.text;
       } catch {
-        res.status(422).json({ error: "Could not read the PDF file. Please ensure it is a valid, non-password-protected PDF." });
+        res.status(422).json({ error: "Could not read the PDF. Ensure it is a valid, non-password-protected PDF." });
         return;
       }
-      const lines = pdfText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 5);
-      for (const line of lines) {
-        const dateMatch = line.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}|\d{4}-\d{2}-\d{2})/);
-        const amountMatch = line.match(/(-?\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/);
-        if (dateMatch && amountMatch) {
-          const parsedDate = parseDateFlexible(dateMatch[1]);
-          if (!parsedDate) continue;
-          const amountStr = amountMatch[1].replace(/\./g, "").replace(",", ".");
-          const amount = parseFloat(amountStr);
-          if (isNaN(amount)) continue;
-          const desc = line.replace(dateMatch[0], "").replace(amountMatch[0], "").replace(/\s+/g, " ").trim() || "Imported transaction";
-          const absAmount = Math.abs(amount);
-          const type: "income" | "expense" = amount > 0 ? "income" : "expense";
-          rows.push({ date: parsedDate, description: desc, amount: absAmount, type, category: guessCategory(desc, amount) });
-        }
-      }
+      rows = parsePdfText(pdfText);
     } else {
-      res.status(400).json({ error: "Unsupported file type. Please upload a CSV or PDF file." });
+      res.status(400).json({ error: "Unsupported file type. Please upload a CSV or PDF." });
       return;
     }
 
     if (rows.length === 0) {
-      res.json({ imported: 0, skipped: 0, transactions: [], message: "No transactions could be parsed from the file. Ensure your CSV has date, description, and amount columns." });
+      res.json({
+        imported: 0,
+        skipped: 0,
+        transactions: [],
+        message: "No transactions found. For CSVs, ensure columns include date, description/concept, and amount. For PDFs, ensure amounts include a currency code (CHF, EUR, USD, etc.).",
+      });
       return;
     }
 
@@ -190,10 +365,13 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       )
       .returning();
 
-    // Update account balance
-    const incomeTotal = rows.filter((r) => r.type === "income").reduce((sum, r) => sum + r.amount, 0);
-    const expenseTotal = rows.filter((r) => r.type === "expense").reduce((sum, r) => sum + r.amount, 0);
-    const net = incomeTotal - expenseTotal;
+    // Update account balance: income adds, expense and transfer subtract
+    const net = rows.reduce((sum, r) => {
+      if (r.type === "income") return sum + r.amount;
+      if (r.type === "expense" || r.type === "transfer") return sum - r.amount;
+      return sum;
+    }, 0);
+
     if (net !== 0) {
       await db
         .update(accountsTable)
