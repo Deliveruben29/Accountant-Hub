@@ -3,14 +3,19 @@ import { db, transactionsTable, accountsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import multer from "multer";
 import { parse as parseCsv } from "csv-parse/sync";
-// Lazily loaded inside the route handler so dynamic import() works in both
-// ESM (tsx dev) and esbuild CJS (production bundle)
+// pdf-parse v2 uses a class-based API: new PDFParse({ data: buffer }).getText()
+// Dynamic import works in both ESM (tsx dev) and esbuild CJS (production bundle)
 async function extractPdfText(buffer: Buffer): Promise<string> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mod: any = await import("pdf-parse");
-  const pdfParse: (buf: Buffer) => Promise<{ text: string }> = mod.default ?? mod;
-  const data = await pdfParse(buffer);
-  return data.text;
+  // v2 exports PDFParse as a named export; handle both ESM wrapper and raw CJS
+  const PDFParse = mod.PDFParse ?? mod.default?.PDFParse;
+  if (typeof PDFParse !== "function") {
+    throw new Error(`pdf-parse PDFParse not found. Module keys: ${Object.keys(mod).join(", ")}`);
+  }
+  const parser = new PDFParse({ data: buffer });
+  const result = await parser.getText();
+  return result.text;
 }
 
 const router: IRouter = Router();
@@ -334,7 +339,8 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       let pdfText = "";
       try {
         pdfText = await extractPdfText(file.buffer);
-      } catch {
+      } catch (err) {
+        console.error("PDF extraction failed:", err);
         res.status(422).json({ error: "Could not read the PDF. Ensure it is a valid, non-password-protected PDF." });
         return;
       }
