@@ -158,14 +158,21 @@ function parsePostFinancePdfText(text: string): ParsedRow[] {
   const parseSwissAmt = (s: string) => parseFloat(s.replace(/ /g, ""));
 
   // The dedicated AMOUNT line that closes each transaction block.
-  // Formats seen in the wild:
-  //   "01.05.25 11.80 30.04.25"
-  //   "21.50 01.05.25"
-  //   "15.90 01.05.25 2 019.95"
-  //   "02.05.25 100.00 02.05.25"
-  //   "04.05.25 1.10 04.05.25 1 691.20"
-  // Pattern: optional booking-date, AMOUNT, valuta-date, optional saldo
-  const AMOUNT_LINE = /^(?:(\d{2})\.(\d{2})\.(\d{2})\s+)?(\d{1,3}(?: \d{3})*\.\d{2})\s+(\d{2}\.\d{2}\.\d{2})(?:\s+\d{1,3}(?: \d{3})*\.\d{2})?$/;
+  //
+  // FORMAT A (older statements – space-separated):
+  //   "01.05.25 11.80 30.04.25"          → booking-date AMOUNT valuta-date
+  //   "21.50 01.05.25"                   → AMOUNT valuta-date
+  //   "04.05.25 1.10 04.05.25 1 691.20"  → booking-date AMOUNT valuta-date saldo
+  //
+  // FORMAT B (Aug 2025+ – tab-separated, dates first then amount):
+  //   "31.07.25\t150.00"                 → valuta-date TAB amount
+  //   "01.08.25 31.07.25\t12.85"         → booking-date valuta-date TAB amount
+  //   "02.08.25 02.08.25\t7.80 1 959.29" → booking-date valuta-date TAB amount saldo
+  //
+  // Format A: optional booking-date, AMOUNT, valuta-date, optional saldo
+  const AMOUNT_LINE_A = /^(?:(\d{2})\.(\d{2})\.(\d{2})\s+)?(\d{1,3}(?: \d{3})*\.\d{2})\s+(\d{2}\.\d{2}\.\d{2})(?:\s+\d{1,3}(?: \d{3})*\.\d{2})?$/;
+  // Format B: booking-date [valuta-date] TAB amount [saldo]
+  const AMOUNT_LINE_B = /^(\d{2})\.(\d{2})\.(\d{2})(?:\s+\d{2}\.\d{2}\.\d{2})?\t(\d{1,3}(?: \d{3})*\.\d{2})(?:\s+\d{1,3}(?: \d{3})*\.\d{2})?$/;
 
   // Lines to skip globally (page headers, footers, personal data, barcodes)
   const GLOBAL_SKIP: RegExp[] = [
@@ -207,8 +214,11 @@ function parsePostFinancePdfText(text: string): ParsedRow[] {
 
   // Transaction type → credit/debit classification
   const TX_TYPES: Array<[RegExp, "income" | "expense" | "transfer"]> = [
-    [/^KAUF\/DIENSTLEISTUNG/i, "expense"],
-    [/^BARGELDBEZUG/i, "expense"],
+    [/^KAUF\//i, "expense"],                         // KAUF/DIENSTLEISTUNG, KAUF/ONLINE-SHOPPING, etc.
+    [/^BARGELDBEZUG/i, "expense"],                   // ATM withdrawal
+    [/^TWINT GELD SENDEN/i, "expense"],              // TWINT outgoing payment
+    [/^TWINT GELD EMPFANGEN/i, "income"],            // TWINT incoming payment
+    [/^TWINT ZAHLUNG/i, "expense"],                  // TWINT shop payment
     [/^LASTSCHRIFT$/i, "expense"],
     [/^GUTSCHRIFT$/i, "income"],
     [/^DAUERAUFTRAG/i, "expense"],
@@ -239,8 +249,12 @@ function parsePostFinancePdfText(text: string): ParsedRow[] {
     /^FILIALE /i,            // PostFinance branches (FILIALE AUSSERSIHL)
     /^SENDER REFERENZ/i,
     /^AUFTRAGGEBER:?$/i,   // GUTSCHRIFT field label
-    /^MITTEILUNGEN:?$/i,   // GUTSCHRIFT field label
+    /^MITTEILUNGEN:?$/i,   // GUTSCHRIFT / TWINT field label
     /^REFERENZEN:?$/i,     // GUTSCHRIFT field label
+    /^AN TELEFON-NR\./i,   // TWINT recipient phone number line
+    /^, [A-Z]/,            // TWINT recipient name prefix line (", SANDRINE")
+    /^PAYMENT ID\s/i,      // online shopping payment reference
+    /^BESTELLNUMMER\s/i,   // online shopping order number
   ];
 
   // State
@@ -276,20 +290,30 @@ function parsePostFinancePdfText(text: string): ParsedRow[] {
     if (/^SENDER REFERENZ:/i.test(raw)) { skipNext = 2; continue; }
 
     // ── Amount line? ─────────────────────────────────────────────────────────
-    const amtMatch = raw.match(AMOUNT_LINE);
-    if (amtMatch) {
-      // amtMatch[1-3] = optional booking date (D,M,Y), [4] = amount, [5] = valuta DD.MM.YY
-      const amount = parseSwissAmt(amtMatch[4]);
+    const amtMatchA = raw.match(AMOUNT_LINE_A);
+    const amtMatchB = !amtMatchA ? raw.match(AMOUNT_LINE_B) : null;
+
+    if (amtMatchA) {
+      // Format A: [1-3]=optional booking date D/M/Y, [4]=amount, [5]=valuta DD.MM.YY
+      const amount = parseSwissAmt(amtMatchA[4]);
       let bookingDate = currentDate;
-      if (amtMatch[1]) {
-        bookingDate = toDate(amtMatch[1], amtMatch[2], amtMatch[3]);
+      if (amtMatchA[1]) {
+        bookingDate = toDate(amtMatchA[1], amtMatchA[2], amtMatchA[3]);
         currentDate = bookingDate;
       }
-      // Fallback: parse valuta date as booking date
-      if (!bookingDate && amtMatch[5]) {
-        const [vd, vm, vy] = amtMatch[5].split(".");
+      if (!bookingDate && amtMatchA[5]) {
+        const [vd, vm, vy] = amtMatchA[5].split(".");
         bookingDate = toDate(vd, vm, vy);
       }
+      commit(amount, bookingDate);
+      continue;
+    }
+
+    if (amtMatchB) {
+      // Format B: [1-3]=booking date D/M/Y, [4]=amount (valuta date is group 4-6 but we captured D/M/Y)
+      const amount = parseSwissAmt(amtMatchB[4]);
+      const bookingDate = toDate(amtMatchB[1], amtMatchB[2], amtMatchB[3]);
+      currentDate = bookingDate;
       commit(amount, bookingDate);
       continue;
     }
