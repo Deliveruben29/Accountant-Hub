@@ -60,6 +60,8 @@ async function testFix1_QueryLimit() {
       accountId,
       date: new Date(Date.now() - i * 86400000).toISOString().split('T')[0],
       amount: 100 + i,
+      type: 'income',
+      category: 'other',
       description: `Test transaction ${i}`
     };
     promises.push(apiCall('POST', '/api/transactions', payload));
@@ -120,6 +122,8 @@ async function testFix3_FuzzyMatching() {
     accountId,
     date: '2025-01-20',
     amount: 150,
+    type: 'expense',
+    category: 'other',
     description: 'Amazon Purchase Electronics'
   });
   const t1Id = t1.data?.id;
@@ -133,7 +137,7 @@ async function testFix3_FuzzyMatching() {
   formData.append('accountId', accountId);
 
   try {
-    const response = await fetch(`${BASE_URL}/statements/upload`, {
+    const response = await fetch(`${BASE_URL}/api/statements/upload`, {
       method: 'POST',
       body: formData
     });
@@ -162,6 +166,8 @@ async function testFix4_ManualRecordProtection() {
     accountId,
     date: '2025-02-01',
     amount: 300,
+    type: 'income',
+    category: 'other',
     description: 'Manual Entry - Should NOT Delete'
   });
   const manualId = manual.data?.id;
@@ -178,14 +184,14 @@ async function testFix4_ManualRecordProtection() {
 }
 
 async function testFix5_ReconcileEndpoint() {
-  console.log('\n═══ TEST 5: Reconcile endpoint for accurate balance ═══\n');
+  console.log('\n═══ TEST 5: Recalculate endpoint for accurate balance ═══\n');
 
-  // GET /accounts/:id/reconcile should recalculate balance
-  const res = await apiCall('POST', `/api/accounts/${accountId}/reconcile`, {});
+  // POST /accounts/:id/recalculate should recalculate balance from all transactions
+  const res = await apiCall('POST', `/api/accounts/${accountId}/recalculate`, {});
   
   const hasBalance = res.data?.balance !== undefined;
-  logTest('Reconcile endpoint exists and returns balance', res.ok && hasBalance,
-    `Balance after reconcile: ${res.data?.balance || 'N/A'}`);
+  logTest('Recalculate endpoint exists and returns balance', res.ok && hasBalance,
+    `Balance after recalculate: ${res.data?.balance || 'N/A'}`);
 }
 
 async function testFix6_TransactionVisibilityInFilters() {
@@ -197,8 +203,9 @@ async function testFix6_TransactionVisibilityInFilters() {
     accountId,
     date: targetDate,
     amount: 550,
+    type: 'expense',
     description: 'Visibility Test TX',
-    category: 'Food'  // Add category to enable filtering
+    category: 'groceries'
   });
   const newTxId = tx.data?.id;
 
@@ -225,7 +232,7 @@ async function testFix7_LimitHandling() {
   formData.append('accountId', accountId);
 
   try {
-    const response = await fetch(`${BASE_URL}/statements/upload`, {
+    const response = await fetch(`${BASE_URL}/api/api/statements/upload`, {
       method: 'POST',
       body: formData
     });
