@@ -16,7 +16,15 @@ async function apiCall(method, endpoint, body = null) {
     if (body) options.body = JSON.stringify(body);
 
     const response = await fetch(`${BASE_URL}${endpoint}`, options);
-    const data = await response.json();
+    const text = await response.text();
+    
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.log(`⚠️  Response not JSON: ${text.substring(0, 100)}`);
+      data = { error: text };
+    }
     
     return { status: response.status, data, ok: response.ok };
   } catch (error) {
@@ -35,7 +43,7 @@ async function setupTestData() {
   console.log('\n═══ SETUP: Creating test account ═══\n');
 
   // 1. Create account
-  let res = await apiCall('POST', '/accounts', { name: 'Test Account', currency: 'USD' });
+  let res = await apiCall('POST', '/api/accounts', { name: 'Test Account', currency: 'USD' });
   accountId = res.data?.id;
   logTest('Create test account', res.ok && accountId, `Account ID: ${accountId}`);
 
@@ -54,7 +62,7 @@ async function testFix1_QueryLimit() {
       amount: 100 + i,
       description: `Test transaction ${i}`
     };
-    promises.push(apiCall('POST', '/transactions', payload));
+    promises.push(apiCall('POST', '/api/transactions', payload));
   }
 
   const results = await Promise.all(promises);
@@ -62,12 +70,12 @@ async function testFix1_QueryLimit() {
   logTest('Create 100 transactions', allCreated, `Created for limit test`);
 
   // Query all transactions
-  const res = await apiCall('GET', `/accounts/${accountId}/transactions?limit=500`);
+  const res = await apiCall('GET', `/api/accounts/${accountId}/transactions?limit=500`);
   const countReturned = res.data?.transactions?.length || 0;
   logTest('Retrieve transactions with limit=500', res.ok, `Returned ${countReturned} transactions`);
 
   // Test limit > 500
-  const res2 = await apiCall('GET', `/accounts/${accountId}/transactions?limit=2000`);
+  const res2 = await apiCall('GET', `/api/accounts/${accountId}/transactions?limit=2000`);
   const count2000 = res2.data?.transactions?.length || 0;
   logTest('Retrieve with limit=2000', res2.ok && count2000 >= countReturned, `Returned ${count2000} (should be ≥ ${countReturned})`);
 }
@@ -108,7 +116,7 @@ async function testFix3_FuzzyMatching() {
   console.log('\n═══ TEST 3: Fuzzy matching for similar transactions ═══\n');
 
   // Create base transaction
-  const t1 = await apiCall('POST', '/transactions', {
+  const t1 = await apiCall('POST', '/api/transactions', {
     accountId,
     date: '2025-01-20',
     amount: 150,
@@ -150,7 +158,7 @@ async function testFix4_ManualRecordProtection() {
   console.log('\n═══ TEST 4: Manual records protection (deleteOnlyImported) ═══\n');
 
   // Create manual transaction (no statementImportId)
-  const manual = await apiCall('POST', '/transactions', {
+  const manual = await apiCall('POST', '/api/transactions', {
     accountId,
     date: '2025-02-01',
     amount: 300,
@@ -161,7 +169,7 @@ async function testFix4_ManualRecordProtection() {
 
   // Try to delete with deleteOnlyImported flag
   // (This should either prevent deletion or return error)
-  const res = await apiCall('DELETE', `/statements/${statementImportId}?deleteOnlyImported=true`);
+  const res = await apiCall('DELETE', `/api/statements/${statementImportId}?deleteOnlyImported=true`);
   
   // Verify manual tx still exists
   const checkManual = await apiCall('GET', `/transactions/${manualId}`);
@@ -173,7 +181,7 @@ async function testFix5_ReconcileEndpoint() {
   console.log('\n═══ TEST 5: Reconcile endpoint for accurate balance ═══\n');
 
   // GET /accounts/:id/reconcile should recalculate balance
-  const res = await apiCall('POST', `/accounts/${accountId}/reconcile`, {});
+  const res = await apiCall('POST', `/api/accounts/${accountId}/reconcile`, {});
   
   const hasBalance = res.data?.balance !== undefined;
   logTest('Reconcile endpoint exists and returns balance', res.ok && hasBalance,
@@ -195,7 +203,7 @@ async function testFix6_TransactionVisibilityInFilters() {
   const newTxId = tx.data?.id;
 
   // Query with filter for that date
-  const res = await apiCall('GET', `/accounts/${accountId}/transactions?date=${targetDate}`);
+  const res = await apiCall('GET', `/api/accounts/${accountId}/transactions?date=${targetDate}`);
   
   const foundNewTX = res.data?.transactions?.some(t => t.id === newTXId);
   logTest('New TX visible immediately in filtered query', foundNewTX,
@@ -238,11 +246,11 @@ async function testFix8_FilterAccuracy() {
   console.log('\n═══ TEST 8: Filter results are accurate ═══\n');
 
   // Get all transactions
-  const allRes = await apiCall('GET', `/accounts/${accountId}/transactions?limit=2000`);
+  const allRes = await apiCall('GET', `/api/accounts/${accountId}/transactions?limit=2000`);
   const allCount = allRes.data?.transactions?.length || 0;
 
   // Get transactions for March
-  const marchRes = await apiCall('GET', `/accounts/${accountId}/transactions?month=3&limit=2000`);
+  const marchRes = await apiCall('GET', `/api/accounts/${accountId}/transactions?month=3&limit=2000`);
   const marchCount = marchRes.data?.transactions?.length || 0;
 
   // Verify counts make sense

@@ -40,11 +40,11 @@ async function main() {
 
   // 1. Health check
   console.log('\n1️⃣  HEALTH CHECK');
-  const health = await testEndpoint('GET', '/health');
+  const health = await testEndpoint('GET', '/api/health');
   
   // 2. Create account
   console.log('\n2️⃣  CREATE ACCOUNT');
-  const accountRes = await testEndpoint('POST', '/accounts', {
+  const accountRes = await testEndpoint('POST', '/api/accounts', {
     name: 'Test Account',
     currency: 'USD'
   });
@@ -60,7 +60,7 @@ async function main() {
 
   // 3. Create transaction
   console.log('\n3️⃣  CREATE TRANSACTION');
-  const txRes = await testEndpoint('POST', '/transactions', {
+  const txRes = await testEndpoint('POST', '/api/transactions', {
     accountId,
     date: '2025-03-16',
     amount: 100,
@@ -76,7 +76,7 @@ async function main() {
 
   // 4. Get transactions
   console.log('\n4️⃣  GET TRANSACTIONS');
-  const getRes = await testEndpoint('GET', `/accounts/${accountId}/transactions`);
+  const getRes = await testEndpoint('GET', `/api/accounts/${accountId}/transactions`);
   
   if (getRes.ok) {
     console.log(`   ✅ Retrieved: ${getRes.data?.transactions?.length || 0} transactions`);
@@ -86,7 +86,7 @@ async function main() {
 
   // 5. Test reconcile endpoint
   console.log('\n5️⃣  RECONCILE ENDPOINT');
-  const reconcileRes = await testEndpoint('POST', `/accounts/${accountId}/reconcile`, {});
+  const reconcileRes = await testEndpoint('POST', `/api/accounts/${accountId}/reconcile`, {});
   
   if (reconcileRes.ok) {
     console.log(`   ✅ Reconcile returned: balance=${reconcileRes.data?.balance}`);
