@@ -766,14 +766,6 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
     //  - Fuzzy match rejection: same date|amount + very similar descriptions
     //  - Force import: skip fuzzy check (only reject exact duplicates)
     const forceImport = req.body.forceImport === "true" || req.body.forceImport === true;
-      .from(transactionsTable)
-      .where(
-        and(
-          eq(transactionsTable.accountId, accountId),
-          gte(transactionsTable.date, minDate),
-          lte(transactionsTable.date, maxDate)
-        )
-      );
 
     // Build exact and fuzzy match maps
     const exactMatchMap = new Map<string, { id: number; amount: string; description: string }>();
