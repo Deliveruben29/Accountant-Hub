@@ -43,12 +43,13 @@ async function main() {
 
   // 1. Health check
   console.log('\n1️⃣  HEALTH CHECK');
-  const health = await testEndpoint('GET', '/api/health');
+  const health = await testEndpoint('GET', '/api/healthz');
   
   // 2. Create account
   console.log('\n2️⃣  CREATE ACCOUNT');
   const accountRes = await testEndpoint('POST', '/api/accounts', {
     name: 'Test Account',
+    type: 'checking',
     currency: 'USD'
   });
   

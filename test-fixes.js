@@ -43,7 +43,7 @@ async function setupTestData() {
   console.log('\n═══ SETUP: Creating test account ═══\n');
 
   // 1. Create account
-  let res = await apiCall('POST', '/api/accounts', { name: 'Test Account', currency: 'USD' });
+  let res = await apiCall('POST', '/api/accounts', { name: 'Test Account', type: 'checking', currency: 'USD' });
   accountId = res.data?.id;
   logTest('Create test account', res.ok && accountId, `Account ID: ${accountId}`);
 
