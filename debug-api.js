@@ -69,6 +69,7 @@ async function main() {
     date: '2025-03-16',
     amount: 100,
     type: 'income',
+    category: 'other',
     description: 'Test transaction'
   });
 
