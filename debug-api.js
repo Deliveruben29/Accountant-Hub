@@ -80,10 +80,10 @@ async function main() {
 
   // 4. Get transactions
   console.log('\n4️⃣  GET TRANSACTIONS');
-  const getRes = await testEndpoint('GET', `/api/accounts/${accountId}/transactions`);
+  const getRes = await testEndpoint('GET', `/api/transactions?accountId=${accountId}`);
   
   if (getRes.ok) {
-    console.log(`   ✅ Retrieved: ${getRes.data?.transactions?.length || 0} transactions`);
+    console.log(`   ✅ Retrieved: ${getRes.data?.data?.length || 0} transactions`);
   } else {
     console.log('   ❌ Error fetching transactions');
   }

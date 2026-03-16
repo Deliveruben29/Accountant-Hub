@@ -70,13 +70,13 @@ async function testFix1_QueryLimit() {
   logTest('Create 100 transactions', allCreated, `Created for limit test`);
 
   // Query all transactions
-  const res = await apiCall('GET', `/api/accounts/${accountId}/transactions?limit=500`);
-  const countReturned = res.data?.transactions?.length || 0;
+  const res = await apiCall('GET', `/api/transactions?accountId=${accountId}&limit=500`);
+  const countReturned = res.data?.data?.length || 0;
   logTest('Retrieve transactions with limit=500', res.ok, `Returned ${countReturned} transactions`);
 
   // Test limit > 500
-  const res2 = await apiCall('GET', `/api/accounts/${accountId}/transactions?limit=2000`);
-  const count2000 = res2.data?.transactions?.length || 0;
+  const res2 = await apiCall('GET', `/api/transactions?accountId=${accountId}&limit=2000`);
+  const count2000 = res2.data?.data?.length || 0;
   logTest('Retrieve with limit=2000', res2.ok && count2000 >= countReturned, `Returned ${count2000} (should be ≥ ${countReturned})`);
 }
 
@@ -193,7 +193,7 @@ async function testFix6_TransactionVisibilityInFilters() {
 
   // Create transaction with specific date
   const targetDate = '2025-03-10';
-  const tx = await apiCall('POST', '/transactions', {
+  const tx = await apiCall('POST', '/api/transactions', {
     accountId,
     date: targetDate,
     amount: 550,
@@ -203,9 +203,9 @@ async function testFix6_TransactionVisibilityInFilters() {
   const newTxId = tx.data?.id;
 
   // Query with filter for that date
-  const res = await apiCall('GET', `/api/accounts/${accountId}/transactions?date=${targetDate}`);
+  const res = await apiCall('GET', `/api/transactions?accountId=${accountId}&startDate=${targetDate}&endDate=${targetDate}`);
   
-  const foundNewTX = res.data?.transactions?.some(t => t.id === newTXId);
+  const foundNewTX = res.data?.data?.some(t => t.id === newTxId);
   logTest('New TX visible immediately in filtered query', foundNewTX,
     `Query for date=${targetDate} – Found new TX: ${foundNewTX}`);
 }
@@ -246,15 +246,15 @@ async function testFix8_FilterAccuracy() {
   console.log('\n═══ TEST 8: Filter results are accurate ═══\n');
 
   // Get all transactions
-  const allRes = await apiCall('GET', `/api/accounts/${accountId}/transactions?limit=2000`);
-  const allCount = allRes.data?.transactions?.length || 0;
+  const allRes = await apiCall('GET', `/api/transactions?accountId=${accountId}&limit=2000`);
+  const allCount = allRes.data?.data?.length || 0;
 
   // Get transactions for March
-  const marchRes = await apiCall('GET', `/api/accounts/${accountId}/transactions?month=3&limit=2000`);
-  const marchCount = marchRes.data?.transactions?.length || 0;
+  const marchRes = await apiCall('GET', `/api/transactions?accountId=${accountId}&limit=2000`);
+  const marchCount = marchRes.data?.data?.length || 0;
 
   // Verify counts make sense
-  const filtered = marchRes.data?.transactions?.filter(t => {
+  const filtered = marchRes.data?.data?.filter(t => {
     const month = new Date(t.date).getMonth() + 1;
     return month === 3;
   });
