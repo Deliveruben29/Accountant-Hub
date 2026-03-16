@@ -68,6 +68,7 @@ async function main() {
     accountId,
     date: '2025-03-16',
     amount: 100,
+    type: 'income',
     description: 'Test transaction'
   });
 
@@ -90,7 +91,7 @@ async function main() {
 
   // 5. Test reconcile endpoint
   console.log('\n5️⃣  RECONCILE ENDPOINT');
-  const reconcileRes = await testEndpoint('POST', `/api/accounts/${accountId}/reconcile`, {});
+  const reconcileRes = await testEndpoint('POST', `/api/accounts/${accountId}/recalculate`, {});
   
   if (reconcileRes.ok) {
     console.log(`   ✅ Reconcile returned: balance=${reconcileRes.data?.balance}`);
