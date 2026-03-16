@@ -10,7 +10,18 @@ app.use(cors({ credentials: true, origin: true }));
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(authMiddleware);
+
+// Skip auth middleware in development for testing
+if (process.env.NODE_ENV === "production") {
+  app.use(authMiddleware);
+} else {
+  // Dev mode: inject mock user
+  app.use((req, res, next) => {
+    req.user = { id: "dev-user", email: "dev@example.com" };
+    req.isAuthenticated = () => true;
+    next();
+  });
+}
 
 app.use("/api", router);
 

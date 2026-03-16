@@ -9,7 +9,10 @@ async function testEndpoint(method, path, body = null) {
   try {
     const options = {
       method,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Auth-User': JSON.stringify({ id: 'test-user', email: 'test@example.com' })
+      }
     };
     if (body) options.body = JSON.stringify(body);
 
