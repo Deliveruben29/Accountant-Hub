@@ -84,7 +84,7 @@ export default function Transactions() {
   const dateBounds = filterMonth ? monthBounds(filterMonth) : {};
 
   const { data: txData, isLoading } = useListTransactions({
-    limit: 500,
+    limit: 2000,
     offset: 0,
     ...(filterAccountId ? { accountId: filterAccountId } : {}),
     ...(filterType ? { type: filterType } : {}),
@@ -186,7 +186,8 @@ export default function Transactions() {
         await createMutation.mutateAsync({ data });
         toast({ title: "Transaction created" });
       }
-      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      // Invalidate all transaction queries (with any filter combination)
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"], exact: false });
       setIsDialogOpen(false);
     } catch (error) {
       toast({ title: "Operation failed", variant: "destructive" });
@@ -197,7 +198,8 @@ export default function Transactions() {
     if (!confirm("Are you sure you want to delete this transaction?")) return;
     try {
       await deleteMutation.mutateAsync({ id });
-      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      // Invalidate all transaction queries (with any filter combination)
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"], exact: false });
       toast({ title: "Transaction deleted" });
     } catch {
       toast({ title: "Failed to delete", variant: "destructive" });

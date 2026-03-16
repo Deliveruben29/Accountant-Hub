@@ -49,7 +49,7 @@ export default function Accounts() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       queryClient.invalidateQueries({ queryKey: getListAccountsQueryKey() });
-      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"], exact: false });
       toast({ title: "Transactions cleared", description: `Deleted ${data.deleted} transaction(s). Ready to re-import.` });
     } catch {
       toast({ title: "Failed to clear transactions", variant: "destructive" });

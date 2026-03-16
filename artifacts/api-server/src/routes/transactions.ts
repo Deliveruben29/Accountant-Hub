@@ -133,4 +133,69 @@ router.delete("/transactions/:id", async (req, res) => {
   }
 });
 
+// ─── RECONCILE ACCOUNT BALANCE ────────────────────────────────────────────────
+// Recalculate account balance from all transactions (fixes inconsistencies)
+router.post("/accounts/:id/reconcile", async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id);
+    if (isNaN(accountId)) {
+      res.status(400).json({ error: "Invalid accountId" });
+      return;
+    }
+
+    const account = await db
+      .select()
+      .from(accountsTable)
+      .where(eq(accountsTable.id, accountId))
+      .limit(1);
+
+    if (!account.length) {
+      res.status(404).json({ error: "Account not found" });
+      return;
+    }
+
+    // Recalculate balance from ALL transactions
+    const oldBalance = parseFloat(account[0].balance);
+    
+    await db
+      .update(accountsTable)
+      .set({
+        balance: sql`(
+          SELECT COALESCE(SUM(
+            CASE WHEN ${transactionsTable.type} = 'income'
+              THEN ${transactionsTable.amount}::numeric
+              ELSE -${transactionsTable.amount}::numeric
+            END
+          ), 0)
+          FROM ${transactionsTable}
+          WHERE ${transactionsTable.accountId} = ${accountId}
+        )`,
+      })
+      .where(eq(accountsTable.id, accountId));
+
+    const [updated] = await db
+      .select()
+      .from(accountsTable)
+      .where(eq(accountsTable.id, accountId));
+
+    const newBalance = parseFloat(updated.balance);
+    const difference = newBalance - oldBalance;
+
+    res.json({
+      reconciled: true,
+      accountId,
+      accountName: account[0].name,
+      oldBalance,
+      newBalance,
+      difference,
+      message: difference === 0
+        ? "Balance was already correct."
+        : `Balance adjusted by ${difference > 0 ? '+' : ''}${difference.toFixed(2)} (was ${oldBalance.toFixed(2)}, now ${newBalance.toFixed(2)})`,
+    });
+  } catch (err) {
+    console.error("Error reconciling account:", err instanceof Error ? err.message : String(err));
+    res.status(500).json({ error: "Failed to reconcile account" });
+  }
+});
+
 export default router;

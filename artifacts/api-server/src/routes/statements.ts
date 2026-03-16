@@ -530,6 +530,45 @@ function parseCsvStatement(buffer: Buffer): ParsedRow[] {
   return rows;
 }
 
+// ─── FUZZY MATCHING & DEDUPLICATION ──────────────────────────────────────────
+
+function normalizeDescription(desc: string): string {
+  return desc
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ") // Collapse multiple spaces
+    .replace(/[^\w\s-]/g, "") // Remove special chars except hyphen
+    .trim();
+}
+
+// Calculate Levenshtein distance between two strings
+function levenshteinDistance(a: string, b: string): number {
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i][j - 1] + 1,      // deletion
+        matrix[i - 1][j] + 1,      // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+// Check if two strings are similar (fuzzy match, >80% similarity threshold)
+function areSimilar(a: string, b: string, threshold: number = 0.8): boolean {
+  if (a === b) return true;
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return true;
+  const distance = levenshteinDistance(a, b);
+  const similarity = 1 - distance / maxLen;
+  return similarity >= threshold;
+}
+
 // ─── STATEMENT IMPORTS: LIST & DELETE ────────────────────────────────────────
 
 router.get("/statement-imports", async (req: Request, res: Response) => {
@@ -551,6 +590,8 @@ router.get("/statement-imports", async (req: Request, res: Response) => {
 router.delete("/statement-imports/:id", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
+    const deleteOnlyImported = req.query.deleteOnlyImported === "true";
+    
     if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     // Fetch the import record first so we know which account to recalculate
@@ -562,10 +603,49 @@ router.delete("/statement-imports/:id", async (req: Request, res: Response) => {
 
     if (!record) { res.status(404).json({ error: "Import not found" }); return; }
 
-    // Delete all transactions linked to this import batch
-    await db
-      .delete(transactionsTable)
-      .where(eq(transactionsTable.statementImportId, id));
+    // Check if there are manual (non-imported) transactions in overlapping date range
+    // Manual transactions have statementImportId = NULL
+    const manualTransactions = await db
+      .select({ id: transactionsTable.id })
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.accountId, record.accountId),
+          sql`${transactionsTable.statementImportId} IS NULL`,
+          gte(transactionsTable.date, record.dateFrom),
+          lte(transactionsTable.date, record.dateTo)
+        )
+      );
+
+    // If manual transactions exist and user hasn't confirmed deletion of only imported ones
+    if (manualTransactions.length > 0 && !deleteOnlyImported) {
+      return res.status(409).json({
+        error: "Cannot delete: manual transactions exist in this date range",
+        code: "MANUAL_TRANSACTIONS_EXIST",
+        manualCount: manualTransactions.length,
+        importedCount: record.txImported,
+        dateFrom: record.dateFrom,
+        dateTo: record.dateTo,
+        message: `There are ${manualTransactions.length} manually created transaction(s) in the range ${record.dateFrom} to ${record.dateTo}. To delete only the ${record.txImported} imported transaction(s), add ?deleteOnlyImported=true to your request.`,
+      });
+    }
+
+    // Delete: either all linked to import, or only the ones with statementImportId (if deleteOnlyImported)
+    if (deleteOnlyImported) {
+      await db
+        .delete(transactionsTable)
+        .where(
+          and(
+            eq(transactionsTable.statementImportId, id),
+            eq(transactionsTable.accountId, record.accountId)
+          )
+        );
+    } else {
+      // No manual transactions exist, safe to delete all linked to import
+      await db
+        .delete(transactionsTable)
+        .where(eq(transactionsTable.statementImportId, id));
+    }
 
     // Delete the import record itself
     await db.delete(statementImportsTable).where(eq(statementImportsTable.id, id));
@@ -587,7 +667,13 @@ router.delete("/statement-imports/:id", async (req: Request, res: Response) => {
       })
       .where(eq(accountsTable.id, record.accountId));
 
-    res.json({ deleted: true, importId: id, accountId: record.accountId });
+    res.json({
+      deleted: true,
+      importId: id,
+      accountId: record.accountId,
+      deletedOnlyImported: deleteOnlyImported,
+      manualTransactionsPreserved: deleteOnlyImported ? manualTransactions.length : 0,
+    });
   } catch (err) {
     console.error("Error deleting import:", err instanceof Error ? err.message : String(err));
     res.status(500).json({ error: "Failed to delete import" });
@@ -659,9 +745,11 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
 
     const existing = await db
       .select({
+        id: transactionsTable.id,
         date: transactionsTable.date,
         amount: transactionsTable.amount,
         type: transactionsTable.type,
+        description: transactionsTable.description,
       })
       .from(transactionsTable)
       .where(
@@ -672,32 +760,120 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
         )
       );
 
-    // Build a set of "date|amount|type" fingerprints already in the DB
-    const existingSet = new Set(
-      existing.map((e) => `${e.date}|${parseFloat(e.amount).toFixed(2)}|${e.type}`)
-    );
+    // ── Deduplication (Smart) ───────────────────────────────────────────────
+    // Supports:
+    //  - Exact match rejection: same date|amount|type|description
+    //  - Fuzzy match rejection: same date|amount + very similar descriptions
+    //  - Force import: skip fuzzy check (only reject exact duplicates)
+    const forceImport = req.body.forceImport === "true" || req.body.forceImport === true;
+      .from(transactionsTable)
+      .where(
+        and(
+          eq(transactionsTable.accountId, accountId),
+          gte(transactionsTable.date, minDate),
+          lte(transactionsTable.date, maxDate)
+        )
+      );
 
-    // Keep track of fingerprints seen within this batch so that two identical
-    // rows in the same PDF only get inserted once (e.g. same ATM withdrawal
-    // appearing twice on the same day for the same amount — still allowed if
-    // the date changes; only exact same-day duplicates are suppressed).
+    // Build exact and fuzzy match maps
+    const exactMatchMap = new Map<string, { id: number; amount: string; description: string }>();
+    const fuzzyMatchMap = new Map<string, Array<{ id: number; description: string; normalized: string }>>();
+
+    for (const e of existing) {
+      // Exact match: date|amount|type|description
+      const exactKey = `${e.date}|${parseFloat(e.amount).toFixed(2)}|${e.type}|${e.description}`;
+      exactMatchMap.set(exactKey, { id: e.id ?? 0, amount: e.amount, description: e.description });
+
+      // Fuzzy match map: date|amount|type → list of existing entries
+      const fuzzyKey = `${e.date}|${parseFloat(e.amount).toFixed(2)}|${e.type}`;
+      if (!fuzzyMatchMap.has(fuzzyKey)) fuzzyMatchMap.set(fuzzyKey, []);
+      fuzzyMatchMap.get(fuzzyKey)!.push({
+        id: e.id ?? 0,
+        description: e.description,
+        normalized: normalizeDescription(e.description),
+      });
+    }
+
+    // Batch tracking (same-file deduplication)
     const batchSeen = new Set<string>();
+    const rejected: Array<{
+      date: string;
+      description: string;
+      amount: number;
+      type: string;
+      category: string;
+      reason: string;
+      conflictingTransactionId?: number;
+      fuzzyMatch?: boolean;
+    }> = [];
 
     const newRows = rows.filter((r) => {
-      const key = `${r.date}|${r.amount.toFixed(2)}|${r.type}`;
-      if (existingSet.has(key) || batchSeen.has(key)) return false;
-      batchSeen.add(key);
+      const exactKey = `${r.date}|${r.amount.toFixed(2)}|${r.type}|${r.description}`;
+      const fuzzyKey = `${r.date}|${r.amount.toFixed(2)}|${r.type}`;
+
+      // 1. Check exact match in batch (same file)
+      if (batchSeen.has(exactKey)) {
+        rejected.push({
+          date: r.date,
+          description: r.description,
+          amount: r.amount,
+          type: r.type,
+          category: r.category,
+          reason: `Duplicate within this file: same transaction already in batch`,
+        });
+        return false;
+      }
+
+      // 2. Check exact match in database
+      if (exactMatchMap.has(exactKey)) {
+        const existing = exactMatchMap.get(exactKey)!;
+        rejected.push({
+          date: r.date,
+          description: r.description,
+          amount: r.amount,
+          type: r.type,
+          category: r.category,
+          reason: `Exact duplicate: already imported on ${r.date}`,
+          conflictingTransactionId: existing.id,
+        });
+        return false;
+      }
+
+      // 3. Check fuzzy match in database (unless forceImport is true)
+      if (!forceImport && fuzzyMatchMap.has(fuzzyKey)) {
+        const similar = fuzzyMatchMap.get(fuzzyKey)!;
+        const normalizedNew = normalizeDescription(r.description);
+        
+        for (const existing of similar) {
+          if (areSimilar(normalizedNew, existing.normalized, 0.75)) {
+            rejected.push({
+              date: r.date,
+              description: r.description,
+              amount: r.amount,
+              type: r.type,
+              category: r.category,
+              reason: `Similar transaction already exists: "${existing.description}" (${(1 - levenshteinDistance(normalizedNew, existing.normalized) / Math.max(normalizedNew.length, existing.normalized.length)) * 100 | 0}% match). Use forceImport=true to override.`,
+              conflictingTransactionId: existing.id,
+              fuzzyMatch: true,
+            });
+            return false;
+          }
+        }
+      }
+
+      batchSeen.add(exactKey);
       return true;
     });
 
-    const skipped = rows.length - newRows.length;
+    const skipped = rejected.length;
 
     if (newRows.length === 0) {
       res.json({
         imported: 0,
         skipped,
+        rejected,
         transactions: [],
-        message: `All ${skipped} transaction(s) from this file already exist for this account — nothing new to import.`,
+        message: `All ${skipped} transaction(s) from this file were rejected (see 'rejected' array for details).`,
       });
       return;
     }
@@ -753,6 +929,7 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       imported: inserted.length,
       skipped,
       importId: importRecord.id,
+      rejected,
       transactions: inserted.map((t) => ({ ...t, amount: parseFloat(t.amount) })),
     });
   } catch (err) {

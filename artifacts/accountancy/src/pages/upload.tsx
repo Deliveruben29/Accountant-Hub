@@ -58,17 +58,27 @@ function useStatementImports(accountId?: number) {
 function useDeleteImport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: number) => {
-      const res = await fetch(`${API_BASE}/api/statement-imports/${id}`, {
+    mutationFn: async (params: { id: number; deleteOnlyImported?: boolean }) => {
+      const url = new URL(`${API_BASE}/api/statement-imports/${params.id}`);
+      if (params.deleteOnlyImported) url.searchParams.set("deleteOnlyImported", "true");
+      
+      const res = await fetch(url.toString(), {
         method: "DELETE",
         credentials: "include",
       });
+      
+      if (res.status === 409) {
+        // Conflict: manual transactions exist
+        const data = await res.json();
+        throw new Error(JSON.stringify(data)); // Pass conflict data through error
+      }
+      
       if (!res.ok) throw new Error("Failed to delete import");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["statement-imports"] });
-      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"], exact: false });
       queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     },
   });
@@ -83,6 +93,8 @@ export default function UploadStatement() {
   const [file, setFile] = useState<File | null>(null);
   const [accountId, setAccountId] = useState<string>("");
   const [result, setResult] = useState<StatementUploadResponse | null>(null);
+  const [forceImportMode, setForceImportMode] = useState(false);
+  const [manualConflict, setManualConflict] = useState<{ importId: number; filename: string; manualCount: number; importedCount: number } | null>(null);
 
   const { data: imports, isLoading: importsLoading } = useStatementImports();
   const deleteImport = useDeleteImport();
@@ -91,6 +103,7 @@ export default function UploadStatement() {
     if (acceptedFiles.length > 0) {
       setFile(acceptedFiles[0]);
       setResult(null);
+      setForceImportMode(false);
     }
   }, []);
 
@@ -104,27 +117,66 @@ export default function UploadStatement() {
     noClick: true,
   });
 
-  const handleUpload = async () => {
+  const handleUpload = async (force?: boolean) => {
     if (!file || !accountId) return;
     try {
-      const response = await uploadMutation.mutateAsync({
-        data: { file, accountId: Number(accountId) },
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("accountId", accountId);
+      if (force) formData.append("forceImport", "true");
+
+      const response = await fetch(`${API_BASE}/api/statements/upload`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
       });
-      setResult(response);
-      queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() });
+      
+      if (!response.ok) throw new Error("Upload failed");
+      const data = await response.json();
+      
+      setResult(data);
+      if (!force && data.rejected?.some((r: any) => r.fuzzyMatch)) {
+        setForceImportMode(true);
+      } else {
+        setForceImportMode(false);
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"], exact: false });
       queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       queryClient.invalidateQueries({ queryKey: ["statement-imports"] });
-      toast({ title: "Statement uploaded successfully" });
+      
+      if (data.imported > 0) {
+        toast({ title: "Statement uploaded successfully" });
+      }
     } catch {
       toast({ title: "Failed to upload statement", variant: "destructive" });
     }
   };
 
-  const handleDelete = async (importId: number, filename: string) => {
+  const handleDelete = async (importId: number, filename: string, deleteOnlyImported?: boolean) => {
     try {
-      await deleteImport.mutateAsync(importId);
-      toast({ title: `Import "${filename}" deleted`, description: "All linked transactions have been removed." });
-    } catch {
+      await deleteImport.mutateAsync({ id: importId, deleteOnlyImported });
+      const msg = deleteOnlyImported
+        ? `Import "${filename}" deleted (manual transactions preserved).`
+        : `Import "${filename}" deleted.`;
+      toast({ title: "Success", description: msg });
+      setManualConflict(null);
+    } catch (err) {
+      const error = err as Error;
+      try {
+        const conflict = JSON.parse(error.message);
+        if (conflict.code === "MANUAL_TRANSACTIONS_EXIST") {
+          setManualConflict({
+            importId,
+            filename,
+            manualCount: conflict.manualCount,
+            importedCount: conflict.importedCount,
+          });
+          return;
+        }
+      } catch (e) {
+        // Not a conflict error
+      }
       toast({ title: "Failed to delete import", variant: "destructive" });
     }
   };
@@ -246,23 +298,75 @@ export default function UploadStatement() {
                 </div>
                 <h2 className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">Import Successful!</h2>
                 <p className="text-emerald-600/80 mt-2">
-                  Imported {result.imported} transactions.{result.skipped > 0 && ` ${result.skipped} already existed and were skipped.`}
+                  Imported {result.imported} transactions.{result.skipped > 0 && ` ${result.skipped} were rejected.`}
                 </p>
               </div>
               <CardContent className="p-0">
-                <div className="max-h-[400px] overflow-auto">
-                  {result.transactions.map((tx, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-4 border-b border-border/30 hover:bg-muted/30">
-                      <div>
-                        <p className="font-medium text-foreground">{tx.description}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(tx.date)} &bull; {tx.category}</p>
-                      </div>
-                      <div className={`font-semibold font-mono ${tx.type === "income" ? "text-emerald-600" : "text-rose-600"}`}>
-                        {tx.type === "income" ? "+" : "−"}{Math.abs(Number(tx.amount)).toFixed(2)}
+                {result.imported > 0 && (
+                  <>
+                    <div className="p-4 bg-muted/10 border-b border-border/30">
+                      <p className="text-sm font-semibold text-foreground mb-3">✓ Successfully Imported ({result.imported})</p>
+                      <div className="max-h-[250px] overflow-auto">
+                        {result.transactions.map((tx, idx) => (
+                          <div key={idx} className="flex items-center justify-between py-2 px-3 border-b border-border/20 last:border-b-0 text-sm hover:bg-muted/20">
+                            <div>
+                              <p className="font-medium text-foreground">{tx.description}</p>
+                              <p className="text-xs text-muted-foreground">{formatDate(tx.date)} • {tx.category}</p>
+                            </div>
+                            <div className={`font-semibold font-mono whitespace-nowrap ml-4 ${tx.type === "income" ? "text-emerald-600" : "text-rose-600"}`}>
+                              {tx.type === "income" ? "+" : "−"}{Math.abs(Number(tx.amount)).toFixed(2)}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
+                {result.rejected && result.rejected.length > 0 && (
+                  <div className="p-4 bg-amber-50/50 dark:bg-amber-950/20 border-b border-border/30">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">⚠ Rejected ({result.rejected.length})</p>
+                      {forceImportMode && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleUpload(true)}
+                          className="text-xs"
+                        >
+                          Force Import
+                        </Button>
+                      )}
+                    </div>
+                    <div className="max-h-[250px] overflow-auto space-y-2">
+                      {result.rejected.map((rej, idx) => (
+                        <div key={idx} className={`text-xs p-2 rounded border ${
+                          rej.fuzzyMatch
+                            ? "bg-amber-100/50 dark:bg-amber-950/40 border-amber-300/50 dark:border-amber-700/50"
+                            : "bg-amber-100/30 dark:bg-amber-950/30 border-amber-200/50 dark:border-amber-800/50"
+                        }`}>
+                          <div className="flex items-start gap-2">
+                            {rej.fuzzyMatch && (
+                              <span className="inline-block bg-amber-200 dark:bg-amber-700 text-amber-900 dark:text-amber-100 px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap mt-0.5">
+                                Fuzzy
+                              </span>
+                            )}
+                            <div className="flex-1">
+                              <p className="font-medium text-amber-900 dark:text-amber-200">
+                                {formatDate(rej.date)} • CHF {rej.amount.toFixed(2)} • {rej.description}
+                              </p>
+                              <p className="text-amber-800/70 dark:text-amber-300/70 mt-1">Reason: {rej.reason}</p>
+                              {rej.conflictingTransactionId && (
+                                <p className="text-amber-700/60 dark:text-amber-400/60 mt-1 italic">
+                                  Conflicts with transaction ID {rej.conflictingTransactionId}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="p-6 bg-muted/20 flex justify-between items-center">
                   <Button variant="outline" onClick={resetUpload}>Upload Another</Button>
                   <Button variant="default" asChild>
@@ -367,6 +471,38 @@ export default function UploadStatement() {
           </Card>
         )}
       </div>
+
+      {/* Manual Conflict Dialog */}
+      <AlertDialog open={!!manualConflict} onOpenChange={(open) => !open && setManualConflict(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Manual Transactions Detected</AlertDialogTitle>
+            <AlertDialogDescription>
+              The date range of this import ({manualConflict?.filename}) contains{" "}
+              <strong>{manualConflict?.manualCount} manually created transaction(s)</strong>.
+              <br />
+              <br />
+              This import has <strong>{manualConflict?.importedCount} imported transaction(s)</strong>.
+              <br />
+              <br />
+              What would you like to do?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Everything</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (manualConflict) {
+                  handleDelete(manualConflict.importId, manualConflict.filename, true);
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Delete Only Imported
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
