@@ -755,6 +755,10 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
     const minDate = dates[0];
     const maxDate = dates[dates.length - 1];
 
+    // For large imports (>500 rows), limit the deduplication window to avoid memory issues
+    // We still check all rows in the import against each other (batch deduplication)
+    const DEDUP_LIMIT = rows.length > 500 ? 5000 : undefined;
+
     const existing = await db
       .select({
         id: transactionsTable.id,
@@ -770,7 +774,8 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
           gte(transactionsTable.date, minDate),
           lte(transactionsTable.date, maxDate)
         )
-      );
+      )
+      .limit(DEDUP_LIMIT || 10000);
 
     // ── Deduplication (Smart) ───────────────────────────────────────────────
     // Supports:
@@ -811,7 +816,12 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       fuzzyMatch?: boolean;
     }> = [];
 
-    const newRows = rows.filter((r) => {
+    const newRows = rows.filter((r, index) => {
+      // Progress logging for large imports
+      if (rows.length > 500 && index % 100 === 0) {
+        console.log(`Processing row ${index + 1}/${rows.length}...`);
+      }
+
       const exactKey = `${r.date}|${r.amount.toFixed(2)}|${r.type}|${r.description}`;
       const fuzzyKey = `${r.date}|${r.amount.toFixed(2)}|${r.type}`;
 
@@ -844,7 +854,8 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       }
 
       // 3. Check fuzzy match in database (unless forceImport is true)
-      if (!forceImport && fuzzyMatchMap.has(fuzzyKey)) {
+      // Skip fuzzy matching for very large imports to improve performance
+      if (!forceImport && rows.length <= 1000 && fuzzyMatchMap.has(fuzzyKey)) {
         const similar = fuzzyMatchMap.get(fuzzyKey)!;
         const normalizedNew = normalizeDescription(r.description);
         
@@ -872,15 +883,18 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
     const skipped = rejected.length;
 
     if (newRows.length === 0) {
+      const fuzzySkipped = rows.length > 1000 ? " (fuzzy matching was disabled for performance)" : "";
       res.json({
         imported: 0,
         skipped,
         rejected,
         transactions: [],
-        message: `All ${skipped} transaction(s) from this file were rejected (see 'rejected' array for details).`,
+        message: `All ${skipped} transaction(s) from this file were rejected (see 'rejected' array for details)${fuzzySkipped}.`,
       });
       return;
     }
+
+    console.log(`Importing ${newRows.length} new transactions (${skipped} skipped)...`);
 
     // Record the import batch
     const [importRecord] = await db
