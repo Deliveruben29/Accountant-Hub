@@ -706,7 +706,13 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
     const ext = file.originalname.toLowerCase();
 
     if (file.mimetype === "text/csv" || ext.endsWith(".csv")) {
-      rows = parseCsvStatement(file.buffer);
+      try {
+        rows = parseCsvStatement(file.buffer);
+      } catch (err) {
+        console.error("CSV parsing failed:", err);
+        res.status(422).json({ error: "Could not parse the CSV file. Ensure it has valid columns: date, description (or concept), and amount." });
+        return;
+      }
     } else if (file.mimetype === "application/pdf" || ext.endsWith(".pdf")) {
       let pdfText = "";
       try {
@@ -716,9 +722,15 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
         res.status(422).json({ error: "Could not read the PDF. Ensure it is a valid, non-password-protected PDF." });
         return;
       }
-      rows = isPostFinanceFormat(pdfText)
-        ? parsePostFinancePdfText(pdfText)
-        : parsePdfText(pdfText);
+      try {
+        rows = isPostFinanceFormat(pdfText)
+          ? parsePostFinancePdfText(pdfText)
+          : parsePdfText(pdfText);
+      } catch (err) {
+        console.error("PDF parsing failed:", err);
+        res.status(422).json({ error: "Could not parse the PDF content. Ensure amounts include currency codes (CHF, EUR, USD, etc.)." });
+        return;
+      }
     } else {
       res.status(400).json({ error: "Unsupported file type. Please upload a CSV or PDF." });
       return;
@@ -920,7 +932,7 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
     res.json({
       imported: inserted.length,
       skipped,
-      importId: importRecord.id,
+      statementImportId: importRecord.id,
       rejected,
       transactions: inserted.map((t) => ({ ...t, amount: parseFloat(t.amount) })),
     });
