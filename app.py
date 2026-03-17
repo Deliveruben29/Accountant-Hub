@@ -133,7 +133,7 @@ if not st.session_state['user_id']:
 # Custom Header Image
 header_img_path = os.path.join(os.path.dirname(__file__), "Media", "AccountHub_cabecera.png")
 if os.path.exists(header_img_path):
-    st.image(header_img_path, use_container_width=True)
+    st.image(header_img_path, use_column_width=True)
 
 # Top Bar / Setup
 col_title, col_lang, col_logout = st.columns([6, 2, 1])
