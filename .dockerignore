@@ -1,0 +1,10 @@
+__pycache__
+.git
+.env
+.DS_Store
+*.db
+accountant.db
+Media/
+artifacts/
+attached_assets/
+scripts/
