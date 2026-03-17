@@ -203,7 +203,7 @@ export const DeleteTransactionParams = zod.object({
  * @summary Upload a PDF or CSV statement for parsing
  */
 export const UploadStatementBody = zod.object({
-  file: zod.instanceof(File),
+  file: zod.any().describe("File object (File | Blob)"),
   accountId: zod.number().describe("Target account ID"),
 });
 

@@ -20,8 +20,8 @@ router.get("/transactions", async (req, res) => {
     if (accountId) conditions.push(eq(transactionsTable.accountId, parseInt(accountId)));
     if (category) conditions.push(eq(transactionsTable.category, category));
     if (type) conditions.push(eq(transactionsTable.type, type));
-    if (startDate) conditions.push(gte(transactionsTable.date, sql`${startDate}::date`));
-    if (endDate) conditions.push(lte(transactionsTable.date, sql`${endDate}::date`));
+    if (startDate) conditions.push(sql`${transactionsTable.date} >= ${startDate}::date`);
+    if (endDate) conditions.push(sql`${transactionsTable.date} <= ${endDate}::date`);
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
