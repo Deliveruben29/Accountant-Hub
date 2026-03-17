@@ -1,0 +1,202 @@
+--- Extracting c:/TBF_Apps/Accountant-Hub/attached_assets/REP_P_CH1909000000166315131_1120012465_0_2025060104062229_1773592725266.pdf (first 2 pages) ---
+Page 1:
+PostFinance AG
+Sie werden betreut von
+Oscar Mananes und Team
+Telefon +41 58 448 14 14
+www.postfinance.ch
+Moya Giner Ruben
+Wil ZH
+Online-Einkäufe mit der PostFinance Card bezahlen: Voraussetzung für den Einsatz der PostFinance Card
+mit Debit Mastercard in Onlineshops ist die Aktivierung von 3-D Secure. Informationen finden Sie unter
+postfinance.ch/3dsecure .
+30.04.25 Kontostand 2 296.55
+01.05.25 KAUF/DIENSTLEISTUNG VOM 30.04.2025 11.80 30.04.25
+KARTEN NR. XXXX1364
+VOLG LADEN
+WIL (CH)
+LASTSCHRIFT 21.50 01.05.25
+UBS SWITZERLAND AG
+BAHNHOFSTRASSE 45
+8098 ZÜRICH
+CH973000522810925900C
+SALT MOBILE SA
+RUE DU CAUDRAY 4
+1020 RENENS VD
+SENDER REFERENZ:
+25031400039348_MAERZ
+20250430000800934008507
+LASTSCHRIFT 21.95 01.05.25
+UBS SWITZERLAND AG
+BAHNHOFSTRASSE 45
+8098 ZÜRICH
+CH973000522810925900C
+SALT MOBILE SA
+RUE DU CAUDRAY 4
+1020 RENENS VD
+SENDER REFERENZ:
+25030400122991_APRIL
+20250430000800933927266
+00.030000
+ED
+65600
+Post CH AG
+P.P.
+CH-4808 Zofingen A-PRIORITY
+Herr
+Ruben Moya Giner
+Hohlgass 17b
+8196 Wil ZH
+Privatkonto
+Seite: 1 / 10
+Kontoauszug 01.05.2025 - 31.05.2025 Datum: 01.06.2025
+IBAN CH19 0900 0000 1663 1513 1 CHF
+Kontonummer 16-631513-1
+BIC POFICHBEXXX
+Datum Text Gutschrift Lastschrift Valuta Saldo
+----------------------------------------
+Page 2:
+01.05.25 KAUF/DIENSTLEISTUNG VOM 01.05.2025 5.45 01.05.25
+KARTEN NR. XXXX1364
+COOP-5307 ZH HAUPTBAHNHOF TO GO
+ZÜRICH (CH)
+BARGELDBEZUG VOM 01.05.2025 200.00 01.05.25
+KARTEN NR. XXXX1364
+FILIALE AUSSERSIHL
+ZÜRICH (CH)
+KAUF/DIENSTLEISTUNG VOM 01.05.2025 15.90 01.05.25 2 019.95
+KARTEN NR. XXXX1364
+LOLLY SHOP GMBH
+ZÜRICH (CH)
+02.05.25 BARGELDBEZUG VOM 02.05.2025 100.00 02.05.25
+KARTEN NR. XXXX1364
+FILIALE AUSSERSIHL
+ZÜRICH (CH)
+KAUF/DIENSTLEISTUNG VOM 01.05.2025 1.50 01.05.25
+KARTEN NR. XXXX1364
+SCHWEIZERISCHE BUNDESB
+ZÜRICH (CH)
+KAUF/DIENSTLEISTUNG VOM 01.05.2025 1.50 01.05.25
+KARTEN NR. XXXX1364
+SCHWEIZERISCHE BUNDESB
+ZÜRICH (CH)
+KAUF/DIENSTLEISTUNG VOM 01.05.2025 80.00 01.05.25
+KARTEN NR. XXXX1364
+REST.BAR SCHWEIZERDEGEN
+ZÜRICH (CH)
+KAUF/DIENSTLEISTUNG VOM 01.05.2025 11.00 01.05.25
+KARTEN NR. XXXX1364
+REST.BAR SCHWEIZERDEGEN
+ZÜRICH (CH)
+KAUF/DIENSTLEISTUNG VOM 02.05.2025 13.50 02.05.25 1 812.45
+KARTEN NR. XXXX1364
+REST.BAR SCHWEIZERDEGEN
+ZÜRICH (CH)
+03.05.25 KAUF/DIENSTLEISTUNG VOM 02.05.2025 100.00 02.05.25
+KARTEN NR. XXXX1364
+SUMUP *TAXI UMUT
+ZURICH (CH)
+KAUF/DIENSTLEISTUNG VOM 03.05.2025 20.15 03.05.25 1 692.30
+KARTEN NR. XXXX1364
+VOLG LADEN
+WIL (CH)
+04.05.25 KAUF/DIENSTLEISTUNG VOM 04.05.2025 1.10 04.05.25 1 691.20
+KARTEN NR. XXXX1364
+COOP-5307 ZH HAUPTBAHNHOF TO GO
+ZÜRICH (CH)
+00.030000
+ED
+65600
+Kontoauszug 01.05.2025 - 31.05.2025
+IBAN CH19 0900 0000 1663 1513 1
+Kontonummer 16-631513-1 Datum: 01.06.2025 Seite 2 / 10
+Datum Text Gutschrift Lastschrift Valuta Saldo
+----------------------------------------
+--- Extracting c:/TBF_Apps/Accountant-Hub/attached_assets/TBF_LibroDeCaja_-_CornerCard_1773583950205.pdf (first 2 pages) ---
+Page 1:
+Ingreso (+)/Gasto (-
+ID_Transacción Fecha Mes Concepto Categoría Entidad/Proveedor
+)
+TBF-001 30/5/2025 mayo Card reload Transfer
+Card reload -CHF50.00
+TBF-002 5/6/2025 Junio Dating Personal
+Google Tinder Dating CHF11.50
+TBF-003 7/6/2025 Junio Dating Personal
+Google Tinder Dating CHF25.00
+TBF-004 7/6/2025 Junio Dating Personal
+Google Tinder Dating CHF1.47
+TBF-005 10/6/2025 junio Card reload Transfer
+Card reload -CHF250.00
+TBF-006 11/6/2025 junio Travel Transport
+SWISS AIR 7242342926790 CHF238.30
+TBF-007 12/6/2025 Junio Dating Personal
+Google Tinder CHF13.50
+TBF-008 12/6/2025 Junio Card reload Traspaso
+Card reload -CHF200.00
+TBF-009 13/6/2025 Junio Groceries Household
+MERCADONA MANUEL CANDELA CHF3.45
+TBF-010 13/6/2025 Junio Restaurant Household
+RESTAURANTE CASA JERONIMO CHF6.29
+TBF-011 13/6/2025 Junio Restaurant Household
+EL TEMPLO CHF4.92
+TBF-012 13/6/2025 Junio Restaurant Household
+EL TEMPLO CHF18.80
+TBF-013 13/6/2025 Junio Night life Leisure
+AALCARAZ CHF47.24
+TBF-014 13/6/2025 Junio NIght life Leisure
+AALCARAZ CHF35.42
+TBF-015 14/6/2025 Junio NIght life Leisure
+ANAR I TORNAR CHF12.30
+TBF-016 14/6/2025 Junio Groceries Household
+AALCARAZ CHF11.81
+TBF-017 14/6/2025 Junio Dating Personal
+Google Tinder CHF13.50
+TBF-018 14/6/2025 Junio Dating Personal
+Google Tinder CHF13.50
+TBF-019 14/6/2025 Junio Dating Personal
+Google Tinder CHF13.50
+----------------------------------------
+Page 2:
+TBF-020 14/6/2025 Junio Dating Personal
+Google Tinder CHF13.50
+TBF-021 14/6/2025 Junio Dating Personal
+Google Tinder CHF13.50
+TBF-022 14/6/2025 Junio REST. CASA JERONVIMiaOjes
+GetYourGuide Deutschla CHF34.00
+TBF-023 19/6/2025 Junio Card reload Transfer
+Card reload -CHF40.00
+TBF-024 26/6/2025 Junio Card reload Transfer
+Card reload -CHF144.23
+TBF-025 3/7/2025 Julio Dating Personal
+Parship PS75VVYB me4ieyg7 CHF55.10
+TBF-026 10/7/2025 Julio Train ABO Transport
+SBB Zurich HB WC CHF1.50
+TBF-027 17/7/2025 Julio Dating Personal
+parship PS75VVYB me4ieyg7 CHF54.64
+TBF-028 18/7/2025 julio SaaS IT Services
+CAPCUT CHF25.00
+TBF-029 18/7/2025 julio SaaS IT Services
+ENVATO CHF27.68
+TBF-030 31/7/2025 julio Card reload Transfer
+Card reload -CHF20.00
+TBF-031 9/8/2025 agosto Dating Transfer
+Card reload -CHF200.00
+TBF-032 27/8/2025 agosto Furniture Household
+UZR*MATRATZEN-CONCORD CHF218.00
+TBF-033 9/9/2025 septiembre Card reload Transfer
+Card reload -CHF50.00
+TBF-034 27/9/2025 septiembre SAaS IT Services
+VIGGLE.AI CHF8.33
+TBF-035 12/11/2025 noviembre SAaS IT Services
+Card reload -CHF200.00
+TBF-036 12/11/2025 noviembre Travel Transport
+FLIXBUS.COM CHF97.20
+TBF-037 30/11/2025 noviembre Card reload Transfer
+Card reload -CHF100.00
+TBF-038 2/12/2025 diciembre Travel Transport
+trainline CHF144.34
+TBF-039 2/12/2025 diciembre SAaS IT Services
+GOOGLE *Google One CHF17.00
+TBF-040 21/12/2025 diciembre Travel Hotel Booking
+Hotel at Booking.com CHF11.02
+----------------------------------------
