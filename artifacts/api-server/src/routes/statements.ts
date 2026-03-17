@@ -650,15 +650,15 @@ router.delete("/statement-imports/:id", async (req: Request, res: Response) => {
     // Delete the import record itself
     await db.delete(statementImportsTable).where(eq(statementImportsTable.id, id));
 
-    // Recalculate account balance
+    // Recalculate account balance (SQLite compatible)
     await db
       .update(accountsTable)
       .set({
         balance: sql`(
           SELECT COALESCE(SUM(
             CASE WHEN ${transactionsTable.type} = 'income'
-              THEN ${transactionsTable.amount}::numeric
-              ELSE -${transactionsTable.amount}::numeric
+              THEN CAST(${transactionsTable.amount} AS REAL)
+              ELSE -CAST(${transactionsTable.amount} AS REAL)
             END
           ), 0)
           FROM ${transactionsTable}
@@ -926,15 +926,15 @@ router.post("/statements/upload", upload.single("file"), async (req: Request, re
       )
       .returning();
 
-    // Recalculate account balance from ALL transactions (idempotent)
+    // Recalculate account balance from ALL transactions (idempotent, SQLite compatible)
     await db
       .update(accountsTable)
       .set({
         balance: sql`(
           SELECT COALESCE(SUM(
             CASE WHEN ${transactionsTable.type} = 'income'
-              THEN ${transactionsTable.amount}::numeric
-              ELSE -${transactionsTable.amount}::numeric
+              THEN CAST(${transactionsTable.amount} AS REAL)
+              ELSE -CAST(${transactionsTable.amount} AS REAL)
             END
           ), 0)
           FROM ${transactionsTable}
