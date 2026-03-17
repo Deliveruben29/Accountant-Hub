@@ -256,8 +256,13 @@ def ingest_pdf(pdf_path, account_source, original_filename, user_id):
     session.commit()
     return added
 
+import os
+
 if __name__ == "__main__":
     init_db(get_engine())
     # Mock user_id 1 (admin)
-    ingest_pdf("c:/TBF_Apps/Accountant-Hub/attached_assets/REP_P_CH1909000000166315131_1120012465_0_2025060104062229_1773592725266.pdf", "PostFinance", "Postfinance_test.pdf", 1)
-    ingest_pdf("c:/TBF_Apps/Accountant-Hub/attached_assets/TBF_LibroDeCaja_-_CornerCard_1773583950205.pdf", "CornerCard", "Cornercard_test.pdf", 1)
+    base_dir = os.path.dirname(__file__)
+    postfinance_pdf = os.path.join(base_dir, "attached_assets", "REP_P_CH1909000000166315131_1120012465_0_2025060104062229_1773592725266.pdf")
+    cornercard_pdf = os.path.join(base_dir, "attached_assets", "TBF_LibroDeCaja_-_CornerCard_1773583950205.pdf")
+    ingest_pdf(postfinance_pdf, "PostFinance", "Postfinance_test.pdf", 1)
+    ingest_pdf(cornercard_pdf, "CornerCard", "Cornercard_test.pdf", 1)

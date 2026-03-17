@@ -131,7 +131,7 @@ if not st.session_state['user_id']:
 # ==========================================
 
 # Custom Header Image
-header_img_path = "C:/TBF_Apps/Accountant-Hub/Media/AccountHub_cabecera.png"
+header_img_path = os.path.join(os.path.dirname(__file__), "Media", "AccountHub_cabecera.png")
 if os.path.exists(header_img_path):
     st.image(header_img_path, use_container_width=True)
 
@@ -195,7 +195,7 @@ st.sidebar.markdown(f"""
 if st.session_state['role'] == "Admin":
     st.sidebar.caption("Admin Mode: Global Access")
     # Custom Admin Background Image feature
-    admin_banner_path = "C:/TBF_Apps/Accountant-Hub/Media/TBF_Bannerbase_032026.gif"
+    admin_banner_path = os.path.join(os.path.dirname(__file__), "Media", "TBF_Bannerbase_032026.gif")
     if os.path.exists(admin_banner_path):
         import base64
         with open(admin_banner_path, "rb") as image_file:

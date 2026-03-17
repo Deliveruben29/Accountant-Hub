@@ -117,7 +117,11 @@ def guess_category(merchant_name, raw_text=""):
             return category
     return "Uncategorized"
 
-def get_engine(db_path="sqlite:///c:/TBF_Apps/Accountant-Hub/accountant.db"):
+import os
+
+def get_engine(db_path=None):
+    if db_path is None:
+        db_path = os.environ.get("DATABASE_URL", "sqlite:///accountant.db")
     return create_engine(db_path, echo=False)
 
 def init_db(engine):
