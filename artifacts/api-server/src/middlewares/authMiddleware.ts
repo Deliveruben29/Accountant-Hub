@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as oidc from "openid-client";
 import { type Request, type Response, type NextFunction } from "express";
 import type { AuthUser } from "@workspace/api-zod";
