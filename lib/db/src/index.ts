@@ -1,16 +1,15 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import Database from "better-sqlite3";
 import * as schema from "./schema";
+import { join } from "path";
 
-const { Pool } = pg;
+// SQLite database file path (dev.db en la raíz del proyecto)
+const dbPath = process.env.DATABASE_URL || join(process.cwd(), "dev.db");
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
-}
+// Crear conexión SQLite
+const sqlite = new Database(dbPath);
+sqlite.pragma("journal_mode = WAL"); // Write-Ahead Logging para mejor rendimiento
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle(pool, { schema });
+export const db = drizzle(sqlite, { schema });
 
 export * from "./schema";
