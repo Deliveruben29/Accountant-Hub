@@ -336,7 +336,7 @@ with selected_tab[2]:
     with st.form("manual_entry_form", clear_on_submit=True):
         col_m1, col_m2, col_m3 = st.columns(3)
         with col_m1:
-            m_date = st.date_input("Date", date.today())
+            m_date = st.date_input(t("date"), date.today())
             m_amount = st.number_input(t("amount"), value=0.0)
         with col_m2:
             m_merchant = st.text_input(t("merchant"))
