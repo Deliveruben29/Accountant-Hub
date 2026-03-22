@@ -6,7 +6,7 @@ import os
 import tempfile
 
 from database import get_engine, get_session, init_db, Transaction, UploadedFile, User, CATEGORY_MAPPING, get_password_hash, verify_password
-from parser import ingest_pdf
+from parser import ingest_file
 from locales import translate
 
 # Initialize DB on start
@@ -313,17 +313,18 @@ with selected_tab[1]:
     with col_acc:
         upload_source = st.selectbox(t("select_bank_format"), ["PostFinance", "CornerCard"])
     with col_up:
-        uploaded_file = st.file_uploader(t("drag_drop"), type=["pdf"])
+        uploaded_file = st.file_uploader(t("drag_drop"), type=["pdf", "xlsx", "xls"])
     
     if uploaded_file is not None:
         if st.button(t("process_pdf")):
             with st.spinner("Processing..."):
                 try:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                    ext = uploaded_file.name.split('.')[-1].lower()
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}') as tmp:
                         tmp.write(uploaded_file.getvalue())
                         tmp_path = tmp.name
                     
-                    added_count = ingest_pdf(tmp_path, upload_source, uploaded_file.name, st.session_state['user_id'])
+                    added_count = ingest_file(tmp_path, upload_source, uploaded_file.name, st.session_state['user_id'])
                     st.success(f"{t('success')}: {added_count} records")
                     os.unlink(tmp_path)
                     load_data.clear()

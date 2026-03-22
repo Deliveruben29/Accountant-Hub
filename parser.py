@@ -199,24 +199,67 @@ class CornerCardParser:
             'long_reference_metadata': f"{line1}\n{line2}"
         })
 
-def ingest_pdf(pdf_path, account_source, original_filename, user_id):
+class CornerCardExcelParser:
+    def __init__(self):
+        self.transactions = []
+
+    def parse(self, excel_path):
+        import pandas as pd
+        df = pd.read_excel(excel_path)
+        
+        for index, row in df.iterrows():
+            if pd.isna(row.get('Date')) or pd.isna(row.get('Amount')):
+                continue
+            
+            try:
+                if isinstance(row['Date'], datetime):
+                    date_obj = row['Date'].date()
+                else:
+                    date_obj = pd.to_datetime(row['Date']).date()
+            except Exception:
+                continue
+
+            amount = float(row['Amount'])
+            merchant = str(row.get('Description', '')).strip()
+            
+            tx_type = 'Expense' if amount < 0 else 'Income'
+            category = guess_category(merchant, f"Status: {row.get('Status', '')} Card: {row.get('Card', '')}")
+            
+            self.transactions.append({
+                'date': date_obj,
+                'amount': amount,
+                'type': tx_type,
+                'merchant': merchant,
+                'city': "",
+                'category': category,
+                'long_reference_metadata': f"Card: {row.get('Card', '')}\nCurrency: {row.get('Currency', '')}\nStatus: {row.get('Status', '')}"
+            })
+
+        return self.transactions
+
+def ingest_file(file_path, account_source, original_filename, user_id):
     from database import UploadedFile
     import os
     
     engine = get_engine()
     session = get_session(engine)
     
+    is_excel = file_path.lower().endswith(('.xlsx', '.xls'))
+    
     if account_source == "PostFinance":
         parser = PostFinanceParser()
     elif account_source == "CornerCard":
-        parser = CornerCardParser()
+        if is_excel:
+            parser = CornerCardExcelParser()
+        else:
+            parser = CornerCardParser()
     else:
         raise ValueError("Unknown account source")
         
-    txs = parser.parse(pdf_path)
+    txs = parser.parse(file_path)
     
     # 1. Register UploadedFile
-    file_size = os.path.getsize(pdf_path)
+    file_size = os.path.getsize(file_path)
     new_file = UploadedFile(
         filename=original_filename,
         file_size=file_size,
@@ -256,6 +299,7 @@ def ingest_pdf(pdf_path, account_source, original_filename, user_id):
     session.commit()
     return added
 
+
 import os
 
 if __name__ == "__main__":
@@ -264,5 +308,5 @@ if __name__ == "__main__":
     base_dir = os.path.dirname(__file__)
     postfinance_pdf = os.path.join(base_dir, "attached_assets", "REP_P_CH1909000000166315131_1120012465_0_2025060104062229_1773592725266.pdf")
     cornercard_pdf = os.path.join(base_dir, "attached_assets", "TBF_LibroDeCaja_-_CornerCard_1773583950205.pdf")
-    ingest_pdf(postfinance_pdf, "PostFinance", "Postfinance_test.pdf", 1)
-    ingest_pdf(cornercard_pdf, "CornerCard", "Cornercard_test.pdf", 1)
+    ingest_file(postfinance_pdf, "PostFinance", "Postfinance_test.pdf", 1)
+    ingest_file(cornercard_pdf, "CornerCard", "Cornercard_test.pdf", 1)
